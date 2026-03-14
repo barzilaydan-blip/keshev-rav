@@ -1,0 +1,1609 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>תזרים — מרכז קשב רב</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f1f5f9; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+    input[type=number] { -moz-appearance: textfield; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+    // ─── CONSTANTS ────────────────────────────────────────────────────────────
+
+    const DEFAULT_THERAPISTS = [
+      { id: 1,  name: 'איריס סער',       therapistRate: 190, instituteProfit: 132 },
+      { id: 2,  name: 'עינת בן הרוש',    therapistRate: 190, instituteProfit: 132 },
+      { id: 3,  name: 'לירית מטלון',     therapistRate: 190, instituteProfit: 132 },
+      { id: 4,  name: 'יעל ליפקין',      therapistRate: 190, instituteProfit: 132 },
+      { id: 5,  name: 'הינדי שמעיה',     therapistRate: 190, instituteProfit: 132 },
+      { id: 6,  name: 'אליה בקרמן',      therapistRate: 190, instituteProfit: 132 },
+      { id: 7,  name: 'אסף דרייפוס',     therapistRate: 225, instituteProfit: 97,  issuesInvoice: true },
+      { id: 8,  name: 'חנה ללוש',        therapistRate: 190, instituteProfit: 132 },
+      { id: 9,  name: 'יהודית חגינסקי',  therapistRate: 190, instituteProfit: 132 },
+      { id: 10, name: 'סיגלית ברזילי',   therapistRate: 190, instituteProfit: 132, issuesInvoice: true },
+      { id: 11, name: 'מיכל סילבר',      therapistRate: 190, instituteProfit: 132 },
+      { id: 12, name: 'דנה ראובני',      therapistRate: 190, instituteProfit: 132 },
+      { id: 13, name: 'רותם פלדמוס',     therapistRate: 190, instituteProfit: 132 },
+    ];
+
+    const INCOME_TYPES = [
+      { key: 'treatments',       label: 'טיפולים',          rate: 400  },
+      { key: 'intakes',          label: 'אינטייקים',        rate: 450  },
+      { key: 'diagnosisTransfer',label: 'אבחונים העברה',    rate: 875  },
+      { key: 'diagnosisSummary', label: 'אבחונים סיכום',    rate: 550  },
+      { key: 'trainings',        label: 'הדרכות',           rate: 350  },
+      { key: 'lectures',         label: 'הרצאות',           rate: null },
+    ];
+
+    const EXPENSE_CATEGORIES = [
+      'הוצאות אחזקה שוטף',
+      'מחשוב',
+      'הוצאות חד פעמיות',
+      'הכשרה מקצועית',
+      'ביטוח',
+      'פרסום',
+      'הוצאות דן שוטפות',
+      'הוצאות דן חד פעמי',
+      'מיסים',
+    ];
+
+    const CATEGORY_ITEMS = {
+      'הוצאות אחזקה שוטף': ['שכירות', 'חשמל', 'מים', 'תמי 4', 'FRESHCUP', 'בזק', 'טלפון נייד לעסק', 'עמלות אשראי', 'גינון', 'מנקה', 'מזכירות', 'אחר'],
+      'מחשוב': ['הנהלת חשבונות', 'טיפולוג/ראפיד', 'SMOOVE', 'נוירוטק (MOXO)', 'Wix', 'Zoom', 'Canva', 'ChatGPT', 'Claude', 'Spotify', 'Google', 'אחר'],
+      'הוצאות חד פעמיות': ['ציוד טיפולי', 'ציוד משרדי', 'כיבוד', 'שיפוץ', 'ניקיון ספות', 'מתנות לצוות', 'אחר'],
+      'הכשרה מקצועית': ['השתלמויות/כנסים', 'הדרכה מקצועית', 'דמי חבר איט"ה', 'דמי חבר הסתדרות הפסיכולוגים', 'הכשרות לצוות', 'אחר'],
+      'ביטוח': ['ביטוח מרפאה', 'ביטוח אחריות מקצועית', 'אחר'],
+      'פרסום': ['פרסום פייסבוק', 'אחר'],
+      'הוצאות דן שוטפות': ['דלק', 'ביטוח רכב', 'רכב - טיפולים', 'כביש 6', 'תשלום חניון', 'שטיפת רכב', 'נייד דן', 'הוט - כבלים', 'אחר'],
+      'הוצאות דן חד פעמי': ['נבלט', 'משתלה', 'אחר'],
+      'מיסים': ['ביטוח בריאות', 'מס הכנסה', 'מס עסקים', 'ביטוח לאומי', 'אחר'],
+    };
+
+    const MONTH_NAMES = [
+      'ינואר','פברואר','מרץ','אפריל','מאי','יוני',
+      'יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר',
+    ];
+
+    const VAT_RATE = 0.18;
+
+    const ASSESSORS = [
+      { id: 'sivan', name: 'סיון גמובוש', baseRate: 1300 },
+      { id: 'lital', name: 'ליטל דכס',   baseRate: 1200 },
+    ];
+    const ADDON_PRICE = 350; // כולל מע"מ
+    const DAN_CATS = ['הוצאות דן שוטפות', 'הוצאות דן חד פעמי'];
+
+    // ─── HELPERS ──────────────────────────────────────────────────────────────
+
+    const fmt = n => Math.round(n).toLocaleString();
+    const fmtDec = n => (Math.round(n * 10) / 10).toString();
+    const num = v => parseFloat(v) || 0;
+    const monthKey = (m, y) => `cf_month_${y}_${String(m).padStart(2,'0')}`;
+
+    const fromStorage = (key, fallback) => {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+      catch { return fallback; }
+    };
+    const toStorage = (key, val) => {
+      try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+    };
+
+    // ─── FIREBASE ─────────────────────────────────────────────────────────────
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBG7zf680kZvhHJBUbXOUVcWuHxniX3fUg",
+      authDomain: "keshev-rav.firebaseapp.com",
+      databaseURL: "https://keshev-rav-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "keshev-rav",
+      storageBucket: "keshev-rav.firebasestorage.app",
+      messagingSenderId: "94450643941",
+      appId: "1:94450643941:web:52bc8fa93720bc57dbf50c",
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const FB = 'kashav';
+
+    const fbWrite = (key, val) => {
+      toStorage(key, val);
+      db.ref(`${FB}/${key}`).set(JSON.stringify(val)).catch(() => {});
+    };
+
+    const fbParse = v => {
+      if (v === null || v === undefined) return null;
+      if (typeof v === 'string') { try { return JSON.parse(v); } catch { return v; } }
+      return v;
+    };
+
+    const emptyMonth = () => ({
+      therapistData: {},
+      assessorData: { sivan: [], lital: [] },
+      expenses: [],
+      danData: { pension: '', fund: '', nationalInsurance: '', incomeTax: '' },
+      income: {
+        invoiceReport: '',
+        finalVat: '',
+        specialIncome:  { amount: '', description: '' },
+        specialExpense: { amount: '', description: '', vat: false },
+        myWork: { treatments:'', intakes:'', diagnosisTransfer:'', diagnosisSummary:'', trainings:'', lecturesPrice:'' },
+      },
+    });
+
+    // ─── APP ──────────────────────────────────────────────────────────────────
+
+    function App() {
+      const today = new Date();
+      const [month, setMonth] = useState(today.getMonth() + 1);
+      const [year,  setYear]  = useState(today.getFullYear());
+      const [tab,   setTab]   = useState('dashboard');
+      const [danUnlocked,    setDanUnlocked]    = useState(false);
+      const [showDanPrompt,  setShowDanPrompt]  = useState(false);
+      const [danPwInput,     setDanPwInput]     = useState('');
+      const [danPwError,     setDanPwError]     = useState(false);
+      const DAN_PASSWORD = '1613';
+
+      const exportData = () => {
+        const keys = Object.keys(localStorage).filter(k => k.startsWith('cf_'));
+        const dump = {};
+        keys.forEach(k => { try { dump[k] = JSON.parse(localStorage.getItem(k)); } catch { dump[k] = localStorage.getItem(k); } });
+        const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `kashav-rav-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const importData = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          try {
+            const dump = JSON.parse(ev.target.result);
+            Object.entries(dump).forEach(([k, v]) => toStorage(k, v));
+            const fbDump = {};
+            Object.entries(dump).forEach(([k, v]) => { fbDump[k] = JSON.stringify(v); });
+            db.ref(FB).set(fbDump).then(() => window.location.reload());
+          } catch {
+            alert('קובץ לא תקין');
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+      };
+
+      const navigateTo = key => {
+        if (key === 'dan' && !danUnlocked) {
+          setDanPwInput('');
+          setDanPwError(false);
+          setShowDanPrompt(true);
+        } else {
+          setTab(key);
+        }
+      };
+
+      const submitDanPassword = () => {
+        if (danPwInput === DAN_PASSWORD) {
+          setDanUnlocked(true);
+          setShowDanPrompt(false);
+          setTab('dan');
+        } else {
+          setDanPwError(true);
+        }
+      };
+
+      const [therapists, setTherapists] = useState(() => fromStorage('cf_therapists', DEFAULT_THERAPISTS));
+      const [vatDefaults, setVatDefaults]   = useState(() => fromStorage('cf_vatDef',  {}));
+      const [itemDefaults, setItemDefaults] = useState(() => fromStorage('cf_itemDef', {}));
+      const [data, setData] = useState(() => {
+        const d = fromStorage(monthKey(today.getMonth()+1, today.getFullYear()), emptyMonth());
+        if (!d.danData || (d.danData.pension === '' && d.danData.fund === '')) {
+          const def = fromStorage('cf_danDef', {});
+          d.danData = { pension: def.pension || '', fund: def.fund || '' };
+        }
+        return d;
+      });
+      const [fbReady, setFbReady] = useState(false);
+
+      // ── Firebase: initial load of all data ──
+      useEffect(() => {
+        db.ref(FB).once('value').then(snap => {
+          const all = snap.val() || {};
+          Object.entries(all).forEach(([k, v]) => toStorage(k, fbParse(v)));
+          setTherapists(fromStorage('cf_therapists', DEFAULT_THERAPISTS));
+          setVatDefaults(fromStorage('cf_vatDef', {}));
+          setItemDefaults(fromStorage('cf_itemDef', {}));
+          const key = monthKey(today.getMonth()+1, today.getFullYear());
+          const d = fromStorage(key, emptyMonth());
+          if (!d.danData || (d.danData.pension === '' && d.danData.fund === '')) {
+            const def = fromStorage('cf_danDef', {});
+            d.danData = { pension: def.pension || '', fund: def.fund || '' };
+          }
+          setData(d);
+          setFbReady(true);
+        }).catch(() => setFbReady(true));
+      }, []);
+
+      // ── Firebase: real-time listener for current month ──
+      useEffect(() => {
+        const key = monthKey(month, year);
+        const ref = db.ref(`${FB}/${key}`);
+        const handler = snap => {
+          const val = fbParse(snap.val());
+          if (val) { toStorage(key, val); setData(val); }
+          else {
+            const d = fromStorage(key, emptyMonth());
+            if (!d.danData || (d.danData.pension === '' && d.danData.fund === '')) {
+              const def = fromStorage('cf_danDef', {});
+              d.danData = { pension: def.pension || '', fund: def.fund || '' };
+            }
+            setData(d);
+          }
+        };
+        ref.on('value', handler);
+        return () => ref.off('value', handler);
+      }, [month, year]);
+
+      // ── Firebase: real-time listener for therapists ──
+      useEffect(() => {
+        const ref = db.ref(`${FB}/cf_therapists`);
+        const handler = snap => {
+          const val = fbParse(snap.val());
+          if (val) { toStorage('cf_therapists', val); setTherapists(val); }
+        };
+        ref.on('value', handler);
+        return () => ref.off('value', handler);
+      }, []);
+
+      const saveTherapists = t => { setTherapists(t); fbWrite('cf_therapists', t); };
+      const saveVat  = d => { setVatDefaults(d);  fbWrite('cf_vatDef',  d); };
+      const saveItem = d => { setItemDefaults(d); fbWrite('cf_itemDef', d); };
+      const saveDan  = d => {
+        saveData({ ...data, danData: d });
+        fbWrite('cf_danDef', d);
+      };
+      const saveData = d => { setData(d); fbWrite(monthKey(month, year), d); };
+
+      const totals = useMemo(() => {
+        const { therapistData, expenses, income } = data;
+        const assessorData = data.assessorData || {};
+
+        let totalPay = 0, totalProfit = 0, therapistVat = 0;
+        therapists.forEach(t => {
+          const h = num((therapistData[t.id] || {}).hours);
+          const basePay = h * t.therapistRate;
+          const vatOnPay = t.issuesInvoice ? basePay * VAT_RATE : 0;
+          totalPay    += basePay + vatOnPay;
+          totalProfit += h * t.instituteProfit;
+          therapistVat += vatOnPay;
+        });
+
+        let assessorPay = 0, assessorVat = 0;
+        ASSESSORS.forEach(a => {
+          (assessorData[a.id] || []).forEach(entry => {
+            const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
+            assessorPay += a.baseRate * (1 + VAT_RATE) + addons;
+            assessorVat += a.baseRate * VAT_RATE + addons * VAT_RATE / (1 + VAT_RATE);
+          });
+        });
+        totalPay += assessorPay;
+
+        let myWork = 0;
+        const mw = income.myWork;
+        INCOME_TYPES.forEach(type => {
+          myWork += type.key === 'lectures'
+            ? num(mw.lecturesPrice)
+            : num(mw[type.key]) * type.rate;
+        });
+
+        const autoIncome      = myWork + totalProfit;
+        const specialIncome   = num((income.specialIncome  || {}).amount);
+        const specialExpense  = num((income.specialExpense || {}).amount);
+        const manualIncome    = num(income.invoiceReport) + specialIncome;
+
+        const isDan = e => DAN_CATS.includes(e.category);
+
+        const regularExp    = expenses.reduce((s, e) => isDan(e) ? s : s + num(e.amount), 0);
+        const regularExpVat = expenses.reduce((s, e) => isDan(e) ? s : s + (e.vat ? num(e.amount) * VAT_RATE : 0), 0);
+        const danExpVat     = expenses.reduce((s, e) => isDan(e) && e.vat ? s + num(e.amount) * VAT_RATE : s, 0);
+        const specialExpenseVat = (income.specialExpense && income.specialExpense.vat) ? specialExpense * VAT_RATE : 0;
+        const calcVatRefund = regularExpVat + therapistVat + assessorVat + specialExpenseVat + danExpVat;
+        const finalVat       = num(income.finalVat); // מעקב בלבד, לא משפיע על חישובים
+        const totalExp       = totalPay + regularExp + specialExpense;
+        const netExp         = totalExp - calcVatRefund;
+        const estimatedVat    = num(income.invoiceReport) * VAT_RATE - calcVatRefund;
+        const clinicProfit    = autoIncome - netExp;
+        const operatingProfit = totalProfit - (regularExp - regularExpVat);
+
+        return {
+          totalPay, totalProfit,
+          myWork, autoIncome, manualIncome,
+          regularExp, totalExp,
+          calcVatRefund, danExpVat, finalVat, effectiveVat: calcVatRefund, netExp,
+          estimatedVat, clinicProfit, operatingProfit,
+          specialIncome, specialExpense,
+          netAuto:   autoIncome   - netExp,
+          netManual: manualIncome - netExp,
+        };
+      }, [therapists, data]);
+
+      const years = [];
+      for (let y = 2024; y <= today.getFullYear() + 2; y++) years.push(y);
+
+      if (!fbReady) return (
+        <div className="min-h-screen bg-gray-950 flex flex-col items-center justify-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-gray-300 text-lg font-medium">מתחבר לענן...</p>
+        </div>
+      );
+
+      return (
+        <div className={`min-h-screen p-3 md:p-6 ${tab === 'dashboard' ? 'bg-gray-950' : 'bg-slate-100'}`}>
+
+          {/* ── Header ── */}
+          <div className={`rounded-2xl shadow-sm px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-4 ${
+            tab === 'dashboard'
+              ? 'bg-gray-900 border border-gray-700'
+              : 'bg-white border border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3">
+              {tab !== 'dashboard' && (
+                <button onClick={() => setTab('dashboard')}
+                  title="חזור לדשבורד"
+                  className="p-2 rounded-xl bg-gray-900 text-white hover:bg-gray-700 transition text-base leading-none">
+                  🏠
+                </button>
+              )}
+              <div>
+                <h1 className={`text-xl font-bold ${tab === 'dashboard' ? 'text-white' : 'text-slate-800'}`}>
+                  {tab === 'dashboard' ? '📊 קשב רב — מבט על' : 'תזרים — מרכז קשב רב'}
+                </h1>
+                <p className={`text-sm mt-0.5 ${tab === 'dashboard' ? 'text-gray-400' : 'text-slate-400'}`}>
+                  {MONTH_NAMES[month-1]} {year}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <select value={month} onChange={e => setMonth(+e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {MONTH_NAMES.map((n,i) => <option key={i} value={i+1}>{n}</option>)}
+              </select>
+              <select value={year} onChange={e => setYear(+e.target.value)}
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {years.map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <button onClick={exportData} title="ייצוא כל הנתונים"
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${tab === 'dashboard' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'}`}>
+                ⬇ ייצוא
+              </button>
+              <label title="ייבוא נתונים מקובץ"
+                className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 cursor-pointer ${tab === 'dashboard' ? 'bg-gray-700 hover:bg-gray-600 text-gray-200' : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'}`}>
+                ⬆ ייבוא
+                <input type="file" accept=".json" onChange={importData} className="hidden" />
+              </label>
+            </div>
+          </div>
+
+          {/* ── Tabs (only shown when NOT on dashboard) ── */}
+          {tab !== 'dashboard' && (
+            <div className="flex gap-1.5 mb-5">
+              {[
+                { key:'therapists', label:'מטפלים ומאבחנים' },
+                { key:'expenses',   label:'הוצאות' },
+                { key:'income',     label:'הכנסות וסיכום' },
+                { key:'dan',        label:'דן סיכום' },
+              ].map(t => (
+                <button key={t.key} onClick={() => navigateTo(t.key)}
+                  className={`px-5 py-2.5 rounded-xl text-sm font-medium transition-all ${
+                    tab === t.key
+                      ? 'bg-blue-600 text-white shadow-md'
+                      : 'bg-white text-slate-600 hover:bg-slate-50 border border-slate-200'
+                  }`}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* ── Content ── */}
+          {tab === 'therapists' && (
+            <TherapistsTab
+              therapists={therapists} therapistData={data.therapistData} totals={totals}
+              assessorData={data.assessorData || {}}
+              monthLabel={`${MONTH_NAMES[month-1]} ${year}`}
+              onUpdateTherapists={saveTherapists}
+              onUpdateData={d => saveData({ ...data, therapistData: d })}
+              onUpdateAssessorData={d => saveData({ ...data, assessorData: d })}
+            />
+          )}
+          {tab === 'expenses' && (
+            <ExpensesTab
+              expenses={data.expenses} vatDefaults={vatDefaults} itemDefaults={itemDefaults}
+              totalPay={totals.totalPay} totals={totals}
+              monthLabel={`${MONTH_NAMES[month-1]} ${year}`}
+              onUpdateExpenses={e => saveData({ ...data, expenses: e })}
+              onUpdateVat={saveVat} onUpdateItemDefaults={saveItem}
+            />
+          )}
+          {tab === 'income' && (
+            <IncomeTab
+              income={data.income} totals={totals}
+              onUpdateIncome={i => saveData({ ...data, income: i })}
+            />
+          )}
+          {tab === 'dan' && (
+            <DanTab
+              totals={totals}
+              danData={data.danData || { pension:'', fund:'' }}
+              onUpdateDan={saveDan}
+            />
+          )}
+          {tab === 'dashboard' && (
+            <DashboardTab
+              totals={totals}
+              therapists={therapists}
+              therapistData={data.therapistData}
+              income={data.income}
+              monthLabel={`${MONTH_NAMES[month-1]} ${year}`}
+              onNavigate={navigateTo}
+              month={month}
+              year={year}
+            />
+          )}
+          {/* Password modal for דן סיכום */}
+          {showDanPrompt && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowDanPrompt(false)}>
+            <div className="bg-white rounded-2xl shadow-xl p-7 w-80 text-right" onClick={e => e.stopPropagation()}>
+              <h2 className="text-lg font-bold text-slate-800 mb-1">דן סיכום</h2>
+              <p className="text-sm text-slate-500 mb-5">הזן סיסמה לכניסה ללשונית</p>
+              <input
+                type="password"
+                value={danPwInput}
+                onChange={e => { setDanPwInput(e.target.value); setDanPwError(false); }}
+                onKeyDown={e => e.key === 'Enter' && submitDanPassword()}
+                placeholder="סיסמה"
+                autoFocus
+                className={`w-full border rounded-xl px-4 py-2.5 text-center text-lg tracking-widest mb-2 focus:outline-none focus:ring-2 ${danPwError ? 'border-red-400 focus:ring-red-300' : 'border-slate-300 focus:ring-blue-400'}`}
+              />
+              {danPwError && <p className="text-red-500 text-xs text-center mb-3">סיסמה שגויה</p>}
+              <div className="flex gap-2 mt-3">
+                <button onClick={submitDanPassword}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 rounded-xl transition">
+                  כניסה
+                </button>
+                <button onClick={() => setShowDanPrompt(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2.5 rounded-xl transition">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
+      );
+    }
+
+    // ─── THERAPISTS TAB ───────────────────────────────────────────────────────
+
+    function TherapistsTab({ therapists, therapistData, totals, assessorData, monthLabel, onUpdateTherapists, onUpdateData, onUpdateAssessorData }) {
+      const [editMode,   setEditMode]   = useState(false);
+      const [editingId,  setEditingId]  = useState(null);
+      const [editForm,   setEditForm]   = useState({});
+      const [showAdd,    setShowAdd]    = useState(false);
+      const [newForm,    setNewForm]    = useState({ name:'', therapistRate:190, instituteProfit:132, issuesInvoice:false });
+
+      const setHours   = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), hours: v } });
+      const setInvoice = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), invoiceReceived: v } });
+
+      const startEdit  = t => { setEditingId(t.id); setEditForm({...t}); };
+      const cancelEdit = () => { setEditingId(null); };
+      const saveEdit   = () => {
+        onUpdateTherapists(therapists.map(t => t.id === editingId ? { ...editForm, therapistRate: +editForm.therapistRate, instituteProfit: +editForm.instituteProfit } : t));
+        setEditingId(null);
+      };
+
+      const deleteT = id => {
+        if (window.confirm('למחוק מטפל זה?')) onUpdateTherapists(therapists.filter(t => t.id !== id));
+      };
+
+      const addTherapist = () => {
+        if (!newForm.name.trim()) return;
+        onUpdateTherapists([...therapists, { id: Date.now(), ...newForm, therapistRate: +newForm.therapistRate, instituteProfit: +newForm.instituteProfit }]);
+        setNewForm({ name:'', therapistRate:190, instituteProfit:132, issuesInvoice:false });
+        setShowAdd(false);
+      };
+
+      const totalHours = therapists.reduce((s, t) => s + num((therapistData[t.id]||{}).hours), 0);
+
+      return (
+        <>
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+          {/* toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100">
+            <h2 className="font-semibold text-slate-800">מעקב תשלומי עובד — {monthLabel}</h2>
+            <div className="flex gap-2">
+              <button onClick={() => setShowAdd(!showAdd)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-4 py-2 rounded-lg transition">
+                + מטפל חדש
+              </button>
+              <button onClick={() => { setEditMode(!editMode); setEditingId(null); }}
+                className={`text-sm px-4 py-2 rounded-lg border transition ${editMode ? 'bg-slate-700 text-white border-slate-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
+                {editMode ? '✓ סיים עריכה' : '✏️ ערוך תעריפים'}
+              </button>
+            </div>
+          </div>
+
+          {/* add form */}
+          {showAdd && (
+            <div className="px-5 py-3 bg-emerald-50 border-b border-emerald-200 flex flex-wrap gap-3 items-end">
+              <Field label="שם">
+                <input value={newForm.name} onChange={e => setNewForm({...newForm, name: e.target.value})}
+                  placeholder="שם המטפל"
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </Field>
+              <Field label="תשלום/שעה">
+                <input type="number" value={newForm.therapistRate} onChange={e => setNewForm({...newForm, therapistRate: e.target.value})}
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-24 text-center focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </Field>
+              <Field label="רווח מכון/שעה">
+                <input type="number" value={newForm.instituteProfit} onChange={e => setNewForm({...newForm, instituteProfit: e.target.value})}
+                  className="border border-slate-300 rounded-lg px-3 py-2 text-sm w-24 text-center focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+              </Field>
+              <Field label="מוציא חשבונית">
+                <input type="checkbox" checked={!!newForm.issuesInvoice} onChange={e => setNewForm({...newForm, issuesInvoice: e.target.checked})}
+                  className="w-5 h-5 accent-emerald-600 cursor-pointer mt-2" />
+              </Field>
+              <button onClick={addTherapist} className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-emerald-700">הוסף</button>
+              <button onClick={() => setShowAdd(false)} className="bg-slate-200 text-slate-700 px-4 py-2 rounded-lg text-sm hover:bg-slate-300">ביטול</button>
+            </div>
+          )}
+
+          {/* table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                  <Th align="right">שם המטפל</Th>
+                  <Th>שעות</Th>
+                  <Th>תשלום שעתי</Th>
+                  <Th>רווח מכון/שעה</Th>
+                  <Th>תשלום למטפל</Th>
+                  <Th>רווח למכון</Th>
+                  <Th>חשבונית</Th>
+                  {editMode && <Th>פעולות</Th>}
+                </tr>
+              </thead>
+              <tbody>
+                {therapists.map((t, idx) => {
+                  const d = therapistData[t.id] || {};
+                  const h = num(d.hours);
+                  const basePay = h * t.therapistRate;
+                  const pay    = t.issuesInvoice ? basePay * (1 + VAT_RATE) : basePay;
+                  const profit = h * t.instituteProfit;
+                  const invoiceOk = !!d.invoiceReceived;
+                  const isEditing = editingId === t.id;
+
+                  return (
+                    <tr key={t.id} className={`border-b border-slate-100 hover:bg-blue-50/30 transition-colors ${idx%2===1 ? 'bg-slate-50/40' : ''}`}>
+
+                      {/* Name */}
+                      <td className="py-3 px-4">
+                        {isEditing
+                          ? <input value={editForm.name} onChange={e => setEditForm({...editForm, name:e.target.value})}
+                              className="border border-blue-400 rounded-lg px-2 py-1.5 w-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          : <span className={`font-medium ${!invoiceOk ? 'text-red-600' : 'text-slate-800'}`}>
+                              {t.name}
+                              {!invoiceOk && h > 0 && <span className="text-xs mr-1" title="חשבונית לא התקבלה">⚠</span>}
+                            </span>
+                        }
+                      </td>
+
+                      {/* Hours */}
+                      <td className="py-2 px-4 text-center">
+                        <input type="number" value={d.hours||''} onChange={e => setHours(t.id, e.target.value)}
+                          placeholder="0" min="0" step="0.5"
+                          className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </td>
+
+                      {/* Therapist rate */}
+                      <td className="py-3 px-4 text-center">
+                        {isEditing
+                          ? <input type="number" value={editForm.therapistRate} onChange={e => setEditForm({...editForm, therapistRate:e.target.value})}
+                              className="w-20 border border-blue-400 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none" />
+                          : <span className="text-slate-600">₪{t.therapistRate}</span>
+                        }
+                      </td>
+
+                      {/* Institute profit/h */}
+                      <td className="py-3 px-4 text-center">
+                        {isEditing
+                          ? <div className="flex flex-col gap-1 items-center">
+                              <input type="number" value={editForm.instituteProfit} onChange={e => setEditForm({...editForm, instituteProfit:e.target.value})}
+                                className="w-20 border border-blue-400 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none" />
+                              <label className="flex items-center gap-1 text-xs text-slate-600 cursor-pointer">
+                                <input type="checkbox" checked={!!editForm.issuesInvoice} onChange={e => setEditForm({...editForm, issuesInvoice:e.target.checked})}
+                                  className="accent-orange-500" />
+                                חשבונית+מע"מ
+                              </label>
+                            </div>
+                          : <div>
+                              <span className="text-slate-600 font-medium">₪{t.instituteProfit}</span>
+                              {t.issuesInvoice && <div className="text-xs text-orange-500">+ מע"מ</div>}
+                            </div>
+                        }
+                      </td>
+
+                      {/* Calculated: therapist payment */}
+                      <td className="py-3 px-4 text-center">
+                        <span className={pay > 0 ? 'font-semibold text-red-500' : 'text-slate-300'}>
+                          {pay > 0 ? `₪${fmt(pay)}` : '—'}
+                        </span>
+                        {t.issuesInvoice && h > 0 && (
+                          <div className="text-xs text-orange-500 leading-none mt-0.5">כולל מע"מ</div>
+                        )}
+                      </td>
+
+                      {/* Calculated: institute profit */}
+                      <td className="py-3 px-4 text-center">
+                        <span className={profit > 0 ? 'font-semibold text-emerald-600' : 'text-slate-300'}>
+                          {profit > 0 ? `₪${fmt(profit)}` : '—'}
+                        </span>
+                      </td>
+
+                      {/* Invoice checkbox */}
+                      <td className="py-3 px-4 text-center">
+                        <input type="checkbox" checked={invoiceOk} onChange={e => setInvoice(t.id, e.target.checked)}
+                          className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                      </td>
+
+                      {/* Edit actions */}
+                      {editMode && (
+                        <td className="py-2 px-4 text-center">
+                          {isEditing
+                            ? <div className="flex gap-1 justify-center">
+                                <button onClick={saveEdit} className="bg-blue-600 text-white text-xs px-2.5 py-1.5 rounded-lg hover:bg-blue-700">שמור</button>
+                                <button onClick={cancelEdit} className="bg-slate-200 text-slate-600 text-xs px-2.5 py-1.5 rounded-lg hover:bg-slate-300">ביטול</button>
+                              </div>
+                            : <div className="flex gap-1 justify-center">
+                                <button onClick={() => startEdit(t)} className="bg-blue-50 text-blue-700 text-xs px-2.5 py-1.5 rounded-lg hover:bg-blue-100">ערוך</button>
+                                <button onClick={() => deleteT(t.id)} className="bg-red-50 text-red-600 text-xs px-2.5 py-1.5 rounded-lg hover:bg-red-100">מחק</button>
+                              </div>
+                          }
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-700 text-white">
+                  <td className="py-3 px-4 font-bold">סה"כ</td>
+                  <td className="py-3 px-4 text-center font-medium">{fmtDec(totalHours)} ש׳</td>
+                  <td colSpan={2}></td>
+                  <td className="py-3 px-4 text-center font-bold text-red-300">₪{fmt(totals.totalPay)}</td>
+                  <td className="py-3 px-4 text-center font-bold text-emerald-300">₪{fmt(totals.totalProfit)}</td>
+                  <td colSpan={editMode ? 2 : 1}></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        {/* ── Assessors section ── */}
+        <div className="mt-6">
+          <h2 className="font-semibold text-slate-700 mb-3 text-base">מאבחנות</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ASSESSORS.map(a => {
+              const entries = assessorData[a.id] || [];
+
+              const addEntry = () => {
+                const updated = { ...assessorData, [a.id]: [...entries, { id: Date.now(), clientName: '', engExp: false, mathExp: false, fullDidactic: false }] };
+                onUpdateAssessorData(updated);
+              };
+
+              const updateEntry = (idx, field, val) => {
+                const newEntries = entries.map((e, i) => i === idx ? { ...e, [field]: val } : e);
+                onUpdateAssessorData({ ...assessorData, [a.id]: newEntries });
+              };
+
+              const removeEntry = idx => {
+                const newEntries = entries.filter((_, i) => i !== idx);
+                onUpdateAssessorData({ ...assessorData, [a.id]: newEntries });
+              };
+
+              const calcEntryPay = entry => {
+                const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
+                return a.baseRate * (1 + VAT_RATE) + addons;
+              };
+
+              const totalPay = entries.reduce((s, e) => s + calcEntryPay(e), 0);
+
+              return (
+                <div key={a.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50">
+                    <div>
+                      <span className="font-semibold text-slate-800">{a.name}</span>
+                      <span className="text-xs text-slate-400 mr-2">בסיס ₪{a.baseRate} + מע"מ לאבחון</span>
+                    </div>
+                    <button onClick={addEntry}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs px-3 py-1.5 rounded-lg transition">
+                      + הוסף אבחון
+                    </button>
+                  </div>
+
+                  {entries.length === 0 && (
+                    <div className="text-center text-slate-400 text-sm py-6">אין אבחונים החודש</div>
+                  )}
+
+                  {entries.length > 0 && (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
+                            <th className="py-2 px-3 text-right font-medium">שם המאובחן</th>
+                            <th className="py-2 px-2 text-center font-medium">אנגלית</th>
+                            <th className="py-2 px-2 text-center font-medium">מתמטיקה</th>
+                            <th className="py-2 px-2 text-center font-medium">דידיקטי מלא</th>
+                            <th className="py-2 px-3 text-center font-medium">סכום</th>
+                            <th className="py-2 px-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {entries.map((entry, idx) => (
+                            <tr key={entry.id} className="border-b border-slate-100 hover:bg-blue-50/20">
+                              <td className="py-2 px-3">
+                                <input value={entry.clientName} onChange={e => updateEntry(idx, 'clientName', e.target.value)}
+                                  placeholder="שם המאובחן"
+                                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input type="checkbox" checked={entry.engExp} onChange={e => updateEntry(idx, 'engExp', e.target.checked)}
+                                  className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input type="checkbox" checked={entry.mathExp} onChange={e => updateEntry(idx, 'mathExp', e.target.checked)}
+                                  className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input type="checkbox" checked={entry.fullDidactic} onChange={e => updateEntry(idx, 'fullDidactic', e.target.checked)}
+                                  className="w-4 h-4 accent-purple-600 cursor-pointer" />
+                              </td>
+                              <td className="py-2 px-3 text-center font-semibold text-red-500 whitespace-nowrap">
+                                ₪{fmt(calcEntryPay(entry))}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button onClick={() => removeEntry(idx)}
+                                  className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 transition">✕</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="bg-slate-700 text-white">
+                            <td className="py-2 px-3 font-bold text-xs" colSpan={4}>סה"כ ({entries.length} אבחונים)</td>
+                            <td className="py-2 px-3 text-center font-bold text-red-300">₪{fmt(totalPay)}</td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        </>
+      );
+    }
+
+    // ─── EXPENSES TAB ─────────────────────────────────────────────────────────
+
+    function ExpensesTab({ expenses, vatDefaults, itemDefaults, totalPay, totals, monthLabel, onUpdateExpenses, onUpdateVat, onUpdateItemDefaults }) {
+
+      const itemKey = (cat, desc) => `${cat}|${desc}`;
+
+      const addRow = () => {
+        const cat = EXPENSE_CATEGORIES[0];
+        onUpdateExpenses([{ id: Date.now(), category: cat, description: '', note: '', amount: '', vat: vatDefaults[cat] || false }, ...expenses]);
+      };
+
+      const update = (id, field, value) => {
+        const updated = expenses.map(exp => {
+          if (exp.id !== id) return exp;
+          const next = { ...exp, [field]: value };
+
+          if (field === 'category') {
+            next.vat = vatDefaults[value] || false;
+            next.description = '';
+          }
+
+          // כשבוחרים תיאור — טען ברירת מחדל אחרונה אם קיימת
+          if (field === 'description' && value) {
+            const saved = itemDefaults[itemKey(exp.category, value)];
+            if (saved) {
+              next.amount = saved.amount;
+              next.vat    = saved.vat;
+            }
+          }
+
+          // שמור ברירת מחדל בכל עדכון סכום/מע"מ כשיש תיאור
+          if ((field === 'amount' || field === 'vat') && exp.description) {
+            const key = itemKey(exp.category, exp.description);
+            onUpdateItemDefaults({
+              ...itemDefaults,
+              [key]: { amount: field === 'amount' ? value : exp.amount, vat: field === 'vat' ? value : exp.vat },
+            });
+          }
+
+          if (field === 'vat') onUpdateVat({ ...vatDefaults, [exp.category]: value });
+          return next;
+        });
+        onUpdateExpenses(updated);
+      };
+
+      const remove = id => onUpdateExpenses(expenses.filter(e => e.id !== id));
+
+      const SummaryBar = () => (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <StatCard label='סה"כ הוצאות גולמי' value={`₪${fmt(totals.totalExp)}`}   color="red"   note="כולל שכר מטפלים" />
+          <StatCard label='החזר מע"מ (18%)'    value={`₪${fmt(totals.effectiveVat)}`} color="blue"  note="על הוצאות עם מע&quot;מ" />
+          <StatCard label="נטו אחרי מע״מ"       value={`₪${fmt(totals.netExp)}`}    color="slate" note="הוצאה אפקטיבית" />
+        </div>
+      );
+
+      return (
+        <div className="space-y-4">
+          <SummaryBar />
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+              <h2 className="font-semibold text-slate-800">הוצאות {monthLabel}</h2>
+              <button onClick={addRow} className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg transition">
+                + הוסף הוצאה
+              </button>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                    <Th align="right">קטגוריה</Th>
+                    <Th align="right">פריט</Th>
+                    <Th align="right">הערה</Th>
+                    <Th>סכום (₪)</Th>
+                    <Th>מע"מ</Th>
+                    <th className="w-10"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Auto row – therapist payments */}
+                  <tr className="border-b border-amber-200 bg-amber-50">
+                    <td className="py-3 px-4">
+                      <span className="inline-block bg-amber-200 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full ml-1">⚙ אוטומטי</span>
+                      <span className="font-medium text-slate-700">שכר מטפלים</span>
+                    </td>
+                    <td className="py-3 px-4 text-slate-400 text-xs">מחושב ממסך מטפלים</td>
+                    <td></td>
+                    <td className="py-3 px-4 text-center font-bold text-red-600">₪{fmt(totalPay)}</td>
+                    <td className="py-3 px-4 text-center text-slate-300">—</td>
+                    <td></td>
+                  </tr>
+
+                  {expenses.length === 0 && (
+                    <tr>
+                      <td colSpan={6} className="py-10 text-center text-slate-400 text-sm">
+                        אין הוצאות — לחץ "+ הוסף הוצאה"
+                      </td>
+                    </tr>
+                  )}
+
+                  {expenses.map((exp, idx) => {
+                    const hasAmount = num(exp.amount) > 0;
+                    return (
+                    <tr key={exp.id} className={`border-b transition-colors ${
+                      hasAmount
+                        ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100/70'
+                        : `border-slate-100 hover:bg-blue-50/20 ${idx%2===1 ? 'bg-slate-50/40' : ''}`
+                    }`}>
+                      <td className="py-2 px-4 min-w-48">
+                        <select value={exp.category} onChange={e => update(exp.id, 'category', e.target.value)}
+                          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-full bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          {EXPENSE_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-2 px-4 min-w-40">
+                        <input value={exp.description} onChange={e => update(exp.id, 'description', e.target.value)}
+                          placeholder="בחר פריט"
+                          list={`items-${exp.id}`}
+                          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <datalist id={`items-${exp.id}`}>
+                          {(CATEGORY_ITEMS[exp.category] || []).map(item => <option key={item} value={item} />)}
+                        </datalist>
+                      </td>
+                      <td className="py-2 px-4 min-w-36">
+                        <input value={exp.note || ''} onChange={e => update(exp.id, 'note', e.target.value)}
+                          placeholder="הערה חופשית"
+                          className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </td>
+                      <td className="py-2 px-4 w-32">
+                        <input type="number" value={exp.amount} onChange={e => update(exp.id, 'amount', e.target.value)}
+                          placeholder="0"
+                          className={`border rounded-lg px-2 py-1.5 text-sm w-full text-center focus:outline-none focus:ring-2 ${
+                            hasAmount ? 'border-emerald-400 bg-emerald-50 focus:ring-emerald-400 font-semibold text-emerald-800' : 'border-slate-300 focus:ring-blue-500'
+                          }`} />
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        <input type="checkbox" checked={exp.vat} onChange={e => update(exp.id, 'vat', e.target.checked)}
+                          className="w-4 h-4 accent-blue-600 cursor-pointer" />
+                      </td>
+                      <td className="py-2 px-4 text-center">
+                        <button onClick={() => remove(exp.id)}
+                          className="text-slate-300 hover:text-red-500 transition p-1 rounded">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"/>
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <SummaryBar />
+        </div>
+      );
+    }
+
+    // ─── INCOME TAB ───────────────────────────────────────────────────────────
+
+    function IncomeTab({ income, totals, onUpdateIncome }) {
+
+      return (
+        <div className="space-y-4">
+
+          {/* Invoice report + special items */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-4">הכנסות לפי דוח הנהלת חשבונות</h2>
+            <div className="space-y-3">
+
+              {/* Main income */}
+              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-xl">
+                <div>
+                  <div className="font-semibold text-slate-800">סה"כ הכנסות</div>
+                  <div className="text-xs text-slate-500 mt-0.5">הזנה ידנית מהמערכת</div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" value={income.invoiceReport||''} onChange={e => onUpdateIncome({...income, invoiceReport: e.target.value})}
+                    placeholder="0"
+                    className="w-36 border border-blue-300 rounded-lg px-3 py-2 text-center text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <span className="text-blue-800 font-bold text-xl w-32 text-left">₪{fmt(num(income.invoiceReport))}</span>
+                </div>
+              </div>
+
+              {/* Special income */}
+              <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-xl gap-3">
+                <div className="font-semibold text-slate-800 whitespace-nowrap">הכנסות מיוחדות</div>
+                <input value={(income.specialIncome||{}).description||''} onChange={e => onUpdateIncome({...income, specialIncome:{...(income.specialIncome||{}), description:e.target.value}})}
+                  placeholder="תיאור"
+                  className="flex-1 border border-emerald-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                <input type="number" value={(income.specialIncome||{}).amount||''} onChange={e => onUpdateIncome({...income, specialIncome:{...(income.specialIncome||{}), amount:e.target.value}})}
+                  placeholder="0"
+                  className="w-32 border border-emerald-300 rounded-lg px-3 py-2 text-center text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                {num((income.specialIncome||{}).amount) > 0 && (
+                  <span className="text-emerald-800 font-bold w-28 text-left">₪{fmt(num((income.specialIncome||{}).amount))}</span>
+                )}
+              </div>
+
+              {/* Special expense */}
+              <div className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-xl gap-3">
+                <div className="font-semibold text-slate-800 whitespace-nowrap">הוצאות מיוחדות</div>
+                <input value={(income.specialExpense||{}).description||''} onChange={e => onUpdateIncome({...income, specialExpense:{...(income.specialExpense||{}), description:e.target.value}})}
+                  placeholder="תיאור"
+                  className="flex-1 border border-red-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400" />
+                <input type="number" value={(income.specialExpense||{}).amount||''} onChange={e => onUpdateIncome({...income, specialExpense:{...(income.specialExpense||{}), amount:e.target.value}})}
+                  placeholder="0"
+                  className="w-32 border border-red-300 rounded-lg px-3 py-2 text-center text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-400" />
+                <label className="flex items-center gap-1 text-xs text-red-700 whitespace-nowrap cursor-pointer">
+                  <input type="checkbox" checked={!!(income.specialExpense||{}).vat} onChange={e => onUpdateIncome({...income, specialExpense:{...(income.specialExpense||{}), vat:e.target.checked}})}
+                    className="w-4 h-4 accent-red-600" />
+                  מע"מ
+                </label>
+                {num((income.specialExpense||{}).amount) > 0 && (
+                  <span className="text-red-700 font-bold w-28 text-left">₪{fmt(num((income.specialExpense||{}).amount))}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Full summary */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-5">סיכום כללי</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+              {/* Expenses */}
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">הוצאות</p>
+                <div className="space-y-1">
+                  <SumRow label="שכר מטפלים"    value={`₪${fmt(totals.totalPay)}`}      red />
+                  <SumRow label="הוצאות תפעול" value={`₪${fmt(totals.regularExp)}`}    red />
+                  {totals.specialExpense > 0 && (
+                    <SumRow label={`הוצאות מיוחדות${(income.specialExpense||{}).description ? ' — ' + income.specialExpense.description : ''}`} value={`₪${fmt(totals.specialExpense)}`} red />
+                  )}
+                  <div>
+                    <SumRow label='זיכוי מע"מ על הוצאות' value={`−₪${fmt(totals.calcVatRefund)}`} blue />
+                    {totals.danExpVat > 0 && (
+                      <div className="text-left text-xs text-slate-400 pr-1">(כולל ₪{fmt(totals.danExpVat)} מהוצאות אישיות)</div>
+                    )}
+                  </div>
+                  <div className="border-t border-slate-200 pt-2 mt-2">
+                    <SumRow label='סה"כ הוצאות נטו' value={`₪${fmt(totals.netExp)}`} bold red />
+                  </div>
+                </div>
+              </div>
+
+              {/* Net result */}
+              <div>
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">תוצאה סופית</p>
+                <div className="space-y-1">
+                  <SumRow label="הכנסות (דוח הנהלת חשבונות)" value={`₪${fmt(num(income.invoiceReport))}`} />
+                  {totals.specialIncome > 0 && (
+                    <SumRow label={`הכנסות מיוחדות${(income.specialIncome||{}).description ? ' — ' + income.specialIncome.description : ''}`} value={`₪${fmt(totals.specialIncome)}`} />
+                  )}
+                  <SumRow label="הוצאות נטו (אחרי מע״מ)"      value={`−₪${fmt(totals.netExp)}`} red />
+                  <div className="border-t border-slate-200 pt-2 mt-2">
+                    <NetRow label="רווח/הפסד" value={totals.netManual} />
+                  </div>
+                </div>
+              </div>
+
+              {/* Estimated VAT */}
+              <div className="md:col-span-2 mt-2">
+                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">מע"מ משוער לתשלום</p>
+                <div className={`p-4 rounded-xl border space-y-2 ${totals.estimatedVat > 0 ? 'bg-orange-50 border-orange-200' : 'bg-emerald-50 border-emerald-200'}`}>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">מע"מ על הכנסות (18% × דוח חשבוניות)</span>
+                    <span className="font-medium">₪{fmt(totals.manualIncome * 0.18)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">מע"מ מזוכה מהוצאות</span>
+                    <span className="font-medium text-blue-600">−₪{fmt(totals.effectiveVat)}</span>
+                  </div>
+                  <div className="border-t border-slate-300 pt-2 flex justify-between font-bold">
+                    <span>{totals.estimatedVat > 0 ? 'תשלום מע"מ משוער' : 'זיכוי מרשות המסים'}</span>
+                    <span className={totals.estimatedVat > 0 ? 'text-orange-700 text-lg' : 'text-emerald-700 text-lg'}>
+                      {totals.estimatedVat > 0 ? '' : '−'}₪{fmt(Math.abs(totals.estimatedVat))}
+                    </span>
+                  </div>
+                </div>
+                {/* Final VAT from accountant */}
+                <div className="flex items-center justify-between mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-700">מע"מ סופי (הנהלת חשבונות)</div>
+                    <div className="text-xs text-slate-400 mt-0.5">אם מוזן, יחליף את המע"מ המחושב</div>
+                  </div>
+                  <input type="number" value={income.finalVat||''} onChange={e => onUpdateIncome({...income, finalVat: e.target.value})}
+                    placeholder="0"
+                    className="w-32 border border-indigo-300 rounded-lg px-3 py-2 text-center text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── DAN TAB ──────────────────────────────────────────────────────────────
+
+    function DanTab({ totals, danData, onUpdateDan }) {
+      const pension            = num(danData.pension);
+      const fund               = num(danData.fund);
+      const nationalInsurance  = num(danData.nationalInsurance);
+      const incomeTax          = num(danData.incomeTax);
+      const totalDeductions    = pension + fund + nationalInsurance + incomeTax;
+      const netPersonal        = totals.netManual - totalDeductions;
+
+      const ProfitLine = ({ label, value, bold, note }) => (
+        <div className={`flex justify-between items-start py-1.5 ${bold ? 'border-t border-slate-200 pt-2.5 mt-1' : ''}`}>
+          <div>
+            <span className={`text-sm ${bold ? 'font-bold text-slate-800' : 'text-slate-600'}`}>{label}</span>
+            {note && <div className="text-xs text-slate-400 mt-0.5">{note}</div>}
+          </div>
+          <span className={`font-medium text-sm ${bold ? 'font-bold text-base' : ''} ${value >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+            {value < 0 ? '−' : ''}₪{fmt(Math.abs(value))}
+          </span>
+        </div>
+      );
+
+      return (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+          {/* Clinic profits */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-4">רווח מהמכון</h2>
+            <div className="space-y-0.5">
+              <ProfitLine
+                label="רווח תפעולי"
+                value={totals.operatingProfit}
+                note="רווח מטפלים פחות הוצאות שוטפות נטו"
+              />
+              <ProfitLine
+                label="רווח המכון"
+                value={totals.netManual}
+                note="הכנסות (דוח חשבוניות) פחות הוצאות נטו"
+                bold
+              />
+            </div>
+          </div>
+
+          {/* Personal */}
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+            <h2 className="font-semibold text-slate-800 mb-4">נטו אישי</h2>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-slate-700 font-medium">פנסיה</label>
+                <input type="number" value={danData.pension}
+                  onChange={e => onUpdateDan({ ...danData, pension: e.target.value })}
+                  placeholder="0"
+                  className="w-36 border border-slate-300 rounded-lg px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-slate-700 font-medium">קרן השתלמות</label>
+                <input type="number" value={danData.fund}
+                  onChange={e => onUpdateDan({ ...danData, fund: e.target.value })}
+                  placeholder="0"
+                  className="w-36 border border-slate-300 rounded-lg px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-slate-700 font-medium">ביטוח לאומי</label>
+                <input type="number" value={danData.nationalInsurance}
+                  onChange={e => onUpdateDan({ ...danData, nationalInsurance: e.target.value })}
+                  placeholder="0"
+                  className="w-36 border border-slate-300 rounded-lg px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-sm text-slate-700 font-medium">מס הכנסה</label>
+                <input type="number" value={danData.incomeTax}
+                  onChange={e => onUpdateDan({ ...danData, incomeTax: e.target.value })}
+                  placeholder="0"
+                  className="w-36 border border-slate-300 rounded-lg px-3 py-2 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="border-t border-slate-200 pt-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">רווח המכון</span>
+                  <span className="font-medium">₪{fmt(totals.netManual)}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-600">ניכויים (פנסיה, קרן, ב"ל, מס)</span>
+                  <span className="font-medium text-red-500">−₪{fmt(totalDeductions)}</span>
+                </div>
+                <div className="flex justify-between font-bold text-base pt-2 border-t border-slate-200">
+                  <span>נטו אישי</span>
+                  <span className={netPersonal >= 0 ? 'text-emerald-700' : 'text-red-600'}>
+                    {netPersonal < 0 ? '−' : ''}₪{fmt(Math.abs(netPersonal))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ─── SHARED COMPONENTS ────────────────────────────────────────────────────
+
+    function Th({ children, align = 'center' }) {
+      return (
+        <th className={`py-3 px-4 font-medium whitespace-nowrap text-${align}`}>{children}</th>
+      );
+    }
+
+    function Field({ label, children }) {
+      return (
+        <div className="flex flex-col gap-1">
+          <label className="text-xs text-slate-600">{label}</label>
+          {children}
+        </div>
+      );
+    }
+
+    function StatCard({ label, value, color, note }) {
+      const base = {
+        red:   'bg-red-50 border-red-200 text-red-700',
+        blue:  'bg-blue-50 border-blue-200 text-blue-700',
+        slate: 'bg-slate-100 border-slate-300 text-slate-700',
+        green: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+      }[color];
+      return (
+        <div className={`rounded-xl border p-4 ${base}`}>
+          <div className="text-xs opacity-70 mb-1">{label}</div>
+          <div className="text-2xl font-bold">{value}</div>
+          {note && <div className="text-xs opacity-60 mt-1" dangerouslySetInnerHTML={{__html: note}} />}
+        </div>
+      );
+    }
+
+    function SumRow({ label, value, red, blue, bold }) {
+      return (
+        <div className={`flex justify-between items-center px-2 py-1.5 rounded ${bold ? 'font-bold bg-slate-50' : ''}`}>
+          <span className={`text-sm ${bold ? 'text-slate-800' : 'text-slate-600'}`}>{label}</span>
+          <span className={`text-sm ${bold ? 'font-bold text-base' : 'font-medium'} ${red ? 'text-red-600' : blue ? 'text-blue-600' : 'text-slate-800'}`}>
+            {value}
+          </span>
+        </div>
+      );
+    }
+
+    function NetRow({ label, value }) {
+      const pos = value >= 0;
+      return (
+        <div className={`flex justify-between items-center px-3 py-2 rounded-lg border ${pos ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+          <span className="text-sm font-medium text-slate-700">{label}</span>
+          <span className={`font-bold text-base ${pos ? 'text-emerald-700' : 'text-red-600'}`}>
+            {pos ? '+' : '−'}₪{fmt(Math.abs(value))}
+          </span>
+        </div>
+      );
+    }
+
+    // ─── DASHBOARD TAB ────────────────────────────────────────────────────────
+
+    const CHART_COLORS = [
+      '#3b82f6','#10b981','#f59e0b','#8b5cf6','#ec4899',
+      '#14b8a6','#f97316','#06b6d4','#84cc16','#e11d48',
+      '#7c3aed','#0891b2','#d97706','#65a30d',
+    ];
+
+    function useChart(ref, config, deps) {
+      const instanceRef = useRef(null);
+      useEffect(() => {
+        const canvas = ref.current;
+        if (!canvas) return;
+        if (instanceRef.current) instanceRef.current.destroy();
+        instanceRef.current = new Chart(canvas, config());
+        return () => { if (instanceRef.current) { instanceRef.current.destroy(); instanceRef.current = null; } };
+      }, deps); // eslint-disable-line
+    }
+
+    function DashboardTab({ totals, therapists, therapistData, income, monthLabel, onNavigate, month, year }) {
+      const pnlRef       = useRef(null);
+      const compareRef   = useRef(null);
+      const therapistRef = useRef(null);
+
+      // ── Monthly P&L data (last 12 months) ──
+      const pnlMonths = useMemo(() => {
+        const results = [];
+        for (let i = 11; i >= 0; i--) {
+          let m = month - i;
+          let y = year;
+          while (m <= 0) { m += 12; y -= 1; }
+          const key = monthKey(m, y);
+          const d = fromStorage(key, null);
+          if (d) {
+            const inc = d.income || {};
+            const expenses = d.expenses || [];
+            const therapistDataM = d.therapistData || {};
+            const assessorDataM = d.assessorData || {};
+            let totalPayM = 0, therapistVatM = 0, assessorVatM = 0;
+            therapists.forEach(t => {
+              const h = num((therapistDataM[t.id] || {}).hours);
+              const basePay = h * t.therapistRate;
+              const vatOnPay = t.issuesInvoice ? basePay * VAT_RATE : 0;
+              totalPayM += basePay + vatOnPay;
+              therapistVatM += vatOnPay;
+            });
+            ASSESSORS.forEach(a => {
+              (assessorDataM[a.id] || []).forEach(entry => {
+                const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
+                totalPayM += a.baseRate * (1 + VAT_RATE) + addons;
+                assessorVatM += a.baseRate * VAT_RATE + addons * VAT_RATE / (1 + VAT_RATE);
+              });
+            });
+            const isDan = e => DAN_CATS.includes(e.category);
+            const regularExpM = expenses.reduce((s, e) => isDan(e) ? s : s + num(e.amount), 0);
+            const regularExpVatM = expenses.reduce((s, e) => isDan(e) ? s : s + (e.vat ? num(e.amount) * VAT_RATE : 0), 0);
+            const danExpVatM = expenses.reduce((s, e) => isDan(e) && e.vat ? s + num(e.amount) * VAT_RATE : s, 0);
+            const specialExpense = num((inc.specialExpense || {}).amount);
+            const specialExpenseVat = (inc.specialExpense && inc.specialExpense.vat) ? specialExpense * VAT_RATE : 0;
+            const calcVatRefundM = regularExpVatM + therapistVatM + assessorVatM + specialExpenseVat + danExpVatM;
+            const finalVatM = num(inc.finalVat);
+            const effectiveVatM = finalVatM > 0 ? finalVatM : calcVatRefundM;
+            const totalExpM = totalPayM + regularExpM + specialExpense;
+            const netExpM = totalExpM - effectiveVatM;
+            const specialIncomeM = num((inc.specialIncome || {}).amount);
+            const manualIncomeM = num(inc.invoiceReport) + specialIncomeM;
+            const netManualM = manualIncomeM - netExpM;
+            results.push({ label: MONTH_NAMES[m - 1], netManual: netManualM, hasData: num(inc.invoiceReport) > 0 || manualIncomeM > 0 });
+          } else {
+            results.push({ label: MONTH_NAMES[m - 1], netManual: 0, hasData: false });
+          }
+        }
+        return results;
+      }, [month, year, therapists]);
+
+      // ── Therapist hours data (current month) ──
+      const therapistHours = useMemo(() =>
+        therapists
+          .map(t => ({ name: t.name, hours: num((therapistData[t.id] || {}).hours) }))
+          .filter(t => t.hours > 0),
+        [therapists, therapistData]
+      );
+
+      // ── Monthly total hours (last 12 months) ──
+      const hoursMonths = useMemo(() => {
+        const results = [];
+        for (let i = 11; i >= 0; i--) {
+          let m = month - i;
+          let y = year;
+          while (m <= 0) { m += 12; y -= 1; }
+          const d = fromStorage(monthKey(m, y), null);
+          let totalH = 0;
+          if (d) {
+            therapists.forEach(t => { totalH += num((d.therapistData || {})[t.id]?.hours); });
+          }
+          results.push({ label: MONTH_NAMES[m - 1], hours: totalH });
+        }
+        return results;
+      }, [month, year, therapists]);
+
+      // ── Chart 1: Monthly P&L line ──
+      useChart(pnlRef, () => ({
+        type: 'line',
+        data: {
+          labels: pnlMonths.map(d => d.label),
+          datasets: [{
+            label: 'רווח/הפסד ₪',
+            data: pnlMonths.map(d => d.netManual),
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            pointBackgroundColor: pnlMonths.map(d => d.netManual >= 0 ? '#10b981' : '#ef4444'),
+            pointRadius: 5,
+            tension: 0.3,
+            fill: true,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` ₪${fmt(ctx.parsed.y)}` } },
+          },
+          scales: {
+            y: { ticks: { callback: v => `₪${fmt(v)}` }, grid: { color: '#374151' } },
+            x: { ticks: { font: { size: 10 }, color: '#9ca3af' }, grid: { display: false } },
+          },
+        },
+      }), [pnlMonths]);
+
+      // ── Chart 2: Income vs Expenses bar ──
+      useChart(compareRef, () => ({
+        type: 'bar',
+        data: {
+          labels: ['הכנסות (דוח)', 'הוצאות נטו', 'רווח/הפסד'],
+          datasets: [{
+            label: 'סכום ₪',
+            data: [totals.manualIncome, totals.netExp, totals.netManual],
+            backgroundColor: [
+              '#3b82f6', '#ef4444',
+              totals.netManual >= 0 ? '#10b981' : '#ef4444',
+            ],
+            borderRadius: 8,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false } },
+          scales: {
+            y: { ticks: { callback: v => `₪${fmt(v)}` }, grid: { color: '#f1f5f9' } },
+            x: { ticks: { font: { size: 11 } } },
+          },
+        },
+      }), [totals]);
+
+      // ── Chart 3: Monthly hours line ──
+      useChart(therapistRef, () => ({
+        type: 'line',
+        data: {
+          labels: hoursMonths.map(d => d.label),
+          datasets: [{
+            label: "שעות טיפול",
+            data: hoursMonths.map(d => d.hours),
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99,102,241,0.1)',
+            pointBackgroundColor: '#6366f1',
+            pointRadius: 5,
+            tension: 0.3,
+            fill: true,
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: true,
+          plugins: { legend: { display: false },
+            tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y} ש׳` } },
+          },
+          scales: {
+            y: { ticks: { callback: v => `${v} ש׳` }, grid: { color: '#374151' } },
+            x: { ticks: { font: { size: 10 }, color: '#9ca3af' }, grid: { display: false } },
+          },
+        },
+      }), [hoursMonths]);
+
+      const totalHours = therapistHours.reduce((s, t) => s + t.hours, 0);
+
+      const DC = 'bg-gray-800 border border-gray-700'; // dark card
+
+      return (
+        <div className="space-y-4">
+          {/* Navigation buttons */}
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { key:'therapists', label:'מטפלים ומאבחנים', icon:'👤', desc:'מעקב תשלומי עובד' },
+              { key:'expenses',   label:'הוצאות',         icon:'📋', desc:'ניהול הוצאות חודשיות' },
+              { key:'income',     label:'הכנסות וסיכום', icon:'💰', desc:'הכנסות ורווח נקי' },
+            ].map(t => (
+              <button key={t.key} onClick={() => onNavigate(t.key)}
+                className="flex items-center gap-3 bg-gray-800 border border-gray-700 hover:bg-gray-700 hover:border-gray-500 rounded-xl px-5 py-3 transition-all text-right">
+                <span className="text-2xl">{t.icon}</span>
+                <div>
+                  <div className="text-white font-semibold text-sm">{t.label}</div>
+                  <div className="text-gray-400 text-xs">{t.desc}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* KPI strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <KpiCard label="הכנסות (דוח)"     value={`₪${fmt(totals.manualIncome)}`} color="green"  dark />
+            <KpiCard label="הוצאות נטו"       value={`₪${fmt(totals.netExp)}`}       color="red"    dark />
+            <KpiCard label="רווח/הפסד"        value={`${totals.netManual>=0?'+':'−'}₪${fmt(Math.abs(totals.netManual))}`} color={totals.netManual>=0?'green':'red'} dark />
+            <KpiCard label="שעות מטפלים"      value={`${fmtDec(totalHours)} ש׳`}    color="blue"   dark />
+            <KpiCard label="רווח ממטפלים"     value={`₪${fmt(totals.totalProfit)}`}  color="blue"   dark />
+            <KpiCard label='החזר מע"מ'         value={`₪${fmt(totals.effectiveVat)}`} color="purple" dark />
+          </div>
+
+          {/* Charts row 1 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Monthly P&L */}
+            <div className={`${DC} rounded-2xl p-5`}>
+              <h3 className="font-semibold text-white mb-1">רווח/הפסד — 12 חודשים אחרונים</h3>
+              <p className="text-xs text-gray-400 mb-4">ירוק = רווח, אדום = הפסד</p>
+              <canvas ref={pnlRef} />
+            </div>
+
+            {/* Income vs expenses */}
+            <div className={`${DC} rounded-2xl p-5`}>
+              <h3 className="font-semibold text-white mb-1">הכנסות מול הוצאות — {monthLabel}</h3>
+              <p className="text-xs text-gray-400 mb-4">השוואה לפי שיטות חישוב</p>
+              <canvas ref={compareRef} />
+            </div>
+          </div>
+
+          {/* Charts row 2 */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Monthly hours line */}
+            <div className={`${DC} rounded-2xl p-5`}>
+              <h3 className="font-semibold text-white mb-1">שעות טיפול — 12 חודשים אחרונים</h3>
+              <p className="text-xs text-gray-400 mb-4">סה"כ שעות טיפול לפי חודש</p>
+              <canvas ref={therapistRef} />
+            </div>
+
+            {/* Therapist detail table */}
+            <div className={`${DC} rounded-2xl p-5`}>
+              <h3 className="font-semibold text-white mb-4">פירוט מטפלים פעילים</h3>
+              {therapistHours.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-700 border-b border-gray-600 text-gray-300">
+                        <th className="text-right py-2 px-3 font-medium">מטפל</th>
+                        <th className="text-center py-2 px-3 font-medium">שעות</th>
+                        <th className="text-center py-2 px-3 font-medium">% מסה"כ</th>
+                        <th className="text-center py-2 px-3 font-medium">תשלום</th>
+                        <th className="text-center py-2 px-3 font-medium">רווח</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {therapistHours.map((t, i) => {
+                        const th = therapists.find(x => x.name === t.name);
+                        const pay    = th ? t.hours * th.therapistRate   : 0;
+                        const profit = th ? t.hours * th.instituteProfit : 0;
+                        const pct = totalHours > 0 ? Math.round(t.hours / totalHours * 100) : 0;
+                        return (
+                          <tr key={t.name} className={`border-b border-gray-700 ${i%2===1?'bg-gray-700/40':''}`}>
+                            <td className="py-2 px-3 font-medium text-gray-100">
+                              <span className="inline-block w-2.5 h-2.5 rounded-full ml-1" style={{background: CHART_COLORS[i % CHART_COLORS.length]}}></span>
+                              {t.name}
+                            </td>
+                            <td className="py-2 px-3 text-center text-gray-200">{t.hours}</td>
+                            <td className="py-2 px-3 text-center">
+                              <div className="flex items-center gap-1.5 justify-center">
+                                <div className="flex-1 bg-gray-600 rounded-full h-1.5 max-w-16">
+                                  <div className="h-1.5 rounded-full bg-blue-400" style={{width:`${pct}%`}}></div>
+                                </div>
+                                <span className="text-xs text-gray-400">{pct}%</span>
+                              </div>
+                            </td>
+                            <td className="py-2 px-3 text-center text-red-400 font-medium">₪{fmt(pay)}</td>
+                            <td className="py-2 px-3 text-center text-emerald-400 font-medium">₪{fmt(profit)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-700 text-white">
+                        <td className="py-2 px-3 font-bold">סה"כ</td>
+                        <td className="py-2 px-3 text-center font-bold">{fmtDec(totalHours)}</td>
+                        <td className="py-2 px-3 text-center">100%</td>
+                        <td className="py-2 px-3 text-center font-bold text-red-300">₪{fmt(totals.totalPay)}</td>
+                        <td className="py-2 px-3 text-center font-bold text-emerald-300">₪{fmt(totals.totalProfit)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              ) : <EmptyChart text="אין מטפלים עם שעות מוזנות" dark />}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function EmptyChart({ text, dark }) {
+      return (
+        <div className={`flex items-center justify-center h-48 text-sm rounded-xl border border-dashed ${
+          dark ? 'text-gray-500 bg-gray-700/30 border-gray-600' : 'text-slate-400 bg-slate-50 border-slate-300'
+        }`}>
+          {text}
+        </div>
+      );
+    }
+
+    function KpiCard({ label, value, color, dark }) {
+      const light = {
+        green:  'bg-emerald-50 border-emerald-200 text-emerald-800',
+        red:    'bg-red-50     border-red-200     text-red-700',
+        blue:   'bg-blue-50   border-blue-200   text-blue-800',
+        purple: 'bg-violet-50 border-violet-200 text-violet-800',
+      };
+      const darkMap = {
+        green:  'bg-emerald-900/40 border-emerald-700 text-emerald-300',
+        red:    'bg-red-900/40    border-red-700    text-red-300',
+        blue:   'bg-blue-900/40  border-blue-700  text-blue-300',
+        purple: 'bg-violet-900/40 border-violet-700 text-violet-300',
+      };
+      return (
+        <div className={`rounded-xl border p-3 ${dark ? darkMap[color] : light[color]}`}>
+          <div className="text-xs opacity-60 mb-1 leading-tight">{label}</div>
+          <div className="text-lg font-bold leading-tight">{value}</div>
+        </div>
+      );
+    }
+
+    // ─── RENDER ───────────────────────────────────────────────────────────────
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

@@ -544,15 +544,27 @@
     // ─── THERAPISTS TAB ───────────────────────────────────────────────────────
 
     function TherapistsTab({ therapists, therapistData, totals, assessorData, monthLabel, onUpdateTherapists, onUpdateData, onUpdateAssessorData }) {
-      const [editMode,   setEditMode]   = useState(false);
-      const [editingId,  setEditingId]  = useState(null);
-      const [editForm,   setEditForm]   = useState({});
-      const [showAdd,    setShowAdd]    = useState(false);
-      const [newForm,    setNewForm]    = useState({ name:'', therapistRate:190, instituteProfit:132, issuesInvoice:false });
+      const [editMode,    setEditMode]    = useState(false);
+      const [editingId,   setEditingId]   = useState(null);
+      const [editForm,    setEditForm]    = useState({});
+      const [showAdd,     setShowAdd]     = useState(false);
+      const [newForm,     setNewForm]     = useState({ name:'', therapistRate:190, instituteProfit:132, issuesInvoice:false });
+      const [bonusNoteId, setBonusNoteId] = useState(null);
+      const [bonusNoteVal,setBonusNoteVal]= useState('');
 
-      const setHours   = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), hours: v } });
-      const setInvoice = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), invoiceReceived: v } });
-      const setBonus   = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), bonus: v } });
+      const setHours      = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), hours: v } });
+      const setInvoice    = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), invoiceReceived: v } });
+      const setBonus      = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), bonus: v } });
+      const setBonusNote  = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), bonusNote: v } });
+
+      const openBonusNote = (id) => {
+        setBonusNoteId(id);
+        setBonusNoteVal((therapistData[id]||{}).bonusNote || '');
+      };
+      const saveBonusNote = () => {
+        setBonusNote(bonusNoteId, bonusNoteVal);
+        setBonusNoteId(null);
+      };
 
       const startEdit  = t => { setEditingId(t.id); setEditForm({...t}); };
       const cancelEdit = () => { setEditingId(null); };
@@ -695,9 +707,16 @@
 
                       {/* Bonus */}
                       <td className="py-2 px-4 text-center">
-                        <input type="number" value={d.bonus||''} onChange={e => setBonus(t.id, e.target.value)}
-                          placeholder="0" min="0"
-                          className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <div className="flex items-center gap-1 justify-center">
+                          <input type="number" value={d.bonus||''} onChange={e => setBonus(t.id, e.target.value)}
+                            placeholder="0" min="0"
+                            className="w-20 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          <button onClick={() => openBonusNote(t.id)}
+                            title={d.bonusNote || 'הוסף הערה'}
+                            className={`w-7 h-7 rounded-full text-xs flex items-center justify-center transition ${d.bonusNote ? 'bg-blue-100 text-blue-600' : 'bg-slate-100 text-slate-400 hover:bg-slate-200'}`}>
+                            {d.bonusNote ? '📝' : '+'}
+                          </button>
+                        </div>
                       </td>
 
                       {/* Calculated: therapist payment */}
@@ -756,6 +775,33 @@
             </table>
           </div>
         </div>
+
+        {/* Bonus note modal */}
+        {bonusNoteId !== null && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setBonusNoteId(null)}>
+            <div className="bg-white rounded-2xl shadow-xl p-6 w-80 text-right" onClick={e => e.stopPropagation()}>
+              <h3 className="font-semibold text-slate-800 mb-3">הערה לתוספת</h3>
+              <textarea
+                value={bonusNoteVal}
+                onChange={e => setBonusNoteVal(e.target.value)}
+                placeholder="תאר את מהות התוספת..."
+                rows={3}
+                autoFocus
+                className="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none mb-4"
+              />
+              <div className="flex gap-2">
+                <button onClick={saveBonusNote}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-xl text-sm transition">
+                  שמור
+                </button>
+                <button onClick={() => setBonusNoteId(null)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-xl text-sm transition">
+                  ביטול
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ── Assessors section ── */}
         <div className="mt-6">

@@ -294,10 +294,12 @@
 
         let totalPay = 0, totalProfit = 0, therapistVat = 0;
         therapists.forEach(t => {
-          const h = num((therapistData[t.id] || {}).hours);
+          const d = therapistData[t.id] || {};
+          const h = num(d.hours);
           const basePay = h * t.therapistRate;
+          const bonus = num(d.bonus);
           const vatOnPay = t.issuesInvoice ? basePay * VAT_RATE : 0;
-          totalPay    += basePay + vatOnPay;
+          totalPay    += basePay + vatOnPay + bonus;
           totalProfit += h * t.instituteProfit;
           therapistVat += vatOnPay;
         });
@@ -550,6 +552,7 @@
 
       const setHours   = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), hours: v } });
       const setInvoice = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), invoiceReceived: v } });
+      const setBonus   = (id, v) => onUpdateData({ ...therapistData, [id]: { ...(therapistData[id]||{}), bonus: v } });
 
       const startEdit  = t => { setEditingId(t.id); setEditForm({...t}); };
       const cancelEdit = () => { setEditingId(null); };
@@ -624,6 +627,7 @@
                   <Th>תשלום שעתי</Th>
                   <Th>רווח מכון/שעה</Th>
                   <Th>תשלום למטפל</Th>
+                  <Th>תוספת</Th>
                   <Th>רווח למכון</Th>
                   <Th>חשבונית</Th>
                   {editMode && <Th>פעולות</Th>}
@@ -699,6 +703,13 @@
                         )}
                       </td>
 
+                      {/* Bonus */}
+                      <td className="py-2 px-4 text-center">
+                        <input type="number" value={d.bonus||''} onChange={e => setBonus(t.id, e.target.value)}
+                          placeholder="0" min="0"
+                          className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                      </td>
+
                       {/* Calculated: institute profit */}
                       <td className="py-3 px-4 text-center">
                         <span className={profit > 0 ? 'font-semibold text-emerald-600' : 'text-slate-300'}>
@@ -737,6 +748,7 @@
                   <td className="py-3 px-4 text-center font-medium">{fmtDec(totalHours)} ש׳</td>
                   <td colSpan={2}></td>
                   <td className="py-3 px-4 text-center font-bold text-red-300">₪{fmt(totals.totalPay)}</td>
+                  <td></td>
                   <td className="py-3 px-4 text-center font-bold text-emerald-300">₪{fmt(totals.totalProfit)}</td>
                   <td colSpan={editMode ? 2 : 1}></td>
                 </tr>

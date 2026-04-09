@@ -304,12 +304,24 @@
           therapistVat += vatOnPay;
         });
 
+        const assessorDefaultAmounts = a => ({
+          basicDiagnosis: a.baseRate * (1 + VAT_RATE),
+          fullDiagnosis:  1500 * (1 + VAT_RATE),
+          mathExp:        350,
+          engExp:         350,
+        });
         let assessorPay = 0, assessorVat = 0;
         ASSESSORS.forEach(a => {
+          const defaults = assessorDefaultAmounts(a);
           (assessorData[a.id] || []).forEach(entry => {
-            const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
-            assessorPay += a.baseRate * (1 + VAT_RATE) + addons;
-            assessorVat += a.baseRate * VAT_RATE + addons * VAT_RATE / (1 + VAT_RATE);
+            ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+              const s = entry[svc] || {};
+              if (s.enabled) {
+                const amount = num(s.amount) || defaults[svc];
+                assessorPay += amount;
+                assessorVat += amount * VAT_RATE / (1 + VAT_RATE);
+              }
+            });
           });
         });
         totalPay += assessorPay;
@@ -810,8 +822,20 @@
             {ASSESSORS.map(a => {
               const entries = assessorData[a.id] || [];
 
+              const defaultAmounts = {
+                basicDiagnosis: Math.round(a.baseRate * (1 + VAT_RATE)),
+                fullDiagnosis:  Math.round(1500 * (1 + VAT_RATE)),
+                mathExp:        350,
+                engExp:         350,
+              };
+
               const addEntry = () => {
-                const updated = { ...assessorData, [a.id]: [...entries, { id: Date.now(), clientName: '', engExp: false, mathExp: false, fullDidactic: false }] };
+                const updated = { ...assessorData, [a.id]: [...entries, { id: Date.now(), clientName: '',
+                  basicDiagnosis: { enabled: false, amount: '' },
+                  fullDiagnosis:  { enabled: false, amount: '' },
+                  mathExp:        { enabled: false, amount: '' },
+                  engExp:         { enabled: false, amount: '' },
+                }]};
                 onUpdateAssessorData(updated);
               };
 
@@ -820,14 +844,30 @@
                 onUpdateAssessorData({ ...assessorData, [a.id]: newEntries });
               };
 
+              const toggleService = (idx, svc) => {
+                const entry = entries[idx];
+                const cur = entry[svc] || { enabled: false, amount: '' };
+                updateEntry(idx, svc, { ...cur, enabled: !cur.enabled });
+              };
+
+              const setServiceAmount = (idx, svc, val) => {
+                const entry = entries[idx];
+                const cur = entry[svc] || { enabled: false, amount: '' };
+                updateEntry(idx, svc, { ...cur, amount: val });
+              };
+
               const removeEntry = idx => {
                 const newEntries = entries.filter((_, i) => i !== idx);
                 onUpdateAssessorData({ ...assessorData, [a.id]: newEntries });
               };
 
               const calcEntryPay = entry => {
-                const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
-                return a.baseRate * (1 + VAT_RATE) + addons;
+                let total = 0;
+                ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+                  const s = entry[svc] || {};
+                  if (s.enabled) total += num(s.amount) || defaultAmounts[svc];
+                });
+                return total;
               };
 
               const totalPay = entries.reduce((s, e) => s + calcEntryPay(e), 0);
@@ -850,56 +890,48 @@
                   )}
 
                   {entries.length > 0 && (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs">
-                            <th className="py-2 px-3 text-right font-medium">שם המאובחן</th>
-                            <th className="py-2 px-2 text-center font-medium">אנגלית</th>
-                            <th className="py-2 px-2 text-center font-medium">מתמטיקה</th>
-                            <th className="py-2 px-2 text-center font-medium">דידיקטי מלא</th>
-                            <th className="py-2 px-3 text-center font-medium">סכום</th>
-                            <th className="py-2 px-2"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {entries.map((entry, idx) => (
-                            <tr key={entry.id} className="border-b border-slate-100 hover:bg-blue-50/20">
-                              <td className="py-2 px-3">
-                                <input value={entry.clientName} onChange={e => updateEntry(idx, 'clientName', e.target.value)}
-                                  placeholder="שם המאובחן"
-                                  className="border border-slate-300 rounded-lg px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <input type="checkbox" checked={entry.engExp} onChange={e => updateEntry(idx, 'engExp', e.target.checked)}
-                                  className="w-4 h-4 accent-blue-600 cursor-pointer" />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <input type="checkbox" checked={entry.mathExp} onChange={e => updateEntry(idx, 'mathExp', e.target.checked)}
-                                  className="w-4 h-4 accent-blue-600 cursor-pointer" />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <input type="checkbox" checked={entry.fullDidactic} onChange={e => updateEntry(idx, 'fullDidactic', e.target.checked)}
-                                  className="w-4 h-4 accent-purple-600 cursor-pointer" />
-                              </td>
-                              <td className="py-2 px-3 text-center font-semibold text-red-500 whitespace-nowrap">
-                                ₪{fmt(calcEntryPay(entry))}
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <button onClick={() => removeEntry(idx)}
-                                  className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 transition">✕</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-slate-700 text-white">
-                            <td className="py-2 px-3 font-bold text-xs" colSpan={4}>סה"כ ({entries.length} אבחונים)</td>
-                            <td className="py-2 px-3 text-center font-bold text-red-300">₪{fmt(totalPay)}</td>
-                            <td></td>
-                          </tr>
-                        </tfoot>
-                      </table>
+                    <div className="divide-y divide-slate-100">
+                      {entries.map((entry, idx) => {
+                        const SERVICES = [
+                          { key: 'basicDiagnosis', label: 'אבחון דידקטי' },
+                          { key: 'fullDiagnosis',  label: 'אבחון דידקטי מלא' },
+                          { key: 'mathExp',        label: 'הרחבה במתמטיקה' },
+                          { key: 'engExp',         label: 'הרחבה באנגלית' },
+                        ];
+                        return (
+                          <div key={entry.id} className="px-4 py-3 hover:bg-blue-50/20">
+                            <div className="flex items-center gap-2 mb-2">
+                              <input value={entry.clientName} onChange={e => updateEntry(idx, 'clientName', e.target.value)}
+                                placeholder="שם המאובחן"
+                                className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                              <span className="text-sm font-semibold text-red-500 whitespace-nowrap">₪{fmt(calcEntryPay(entry))}</span>
+                              <button onClick={() => removeEntry(idx)}
+                                className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 transition">✕</button>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                              {SERVICES.map(svc => {
+                                const s = entry[svc.key] || { enabled: false, amount: '' };
+                                return (
+                                  <div key={svc.key} className={`flex items-center gap-1.5 rounded-lg px-2 py-1 border ${s.enabled ? 'bg-blue-50 border-blue-200' : 'bg-slate-50 border-slate-200'}`}>
+                                    <input type="checkbox" checked={!!s.enabled} onChange={() => toggleService(idx, svc.key)}
+                                      className="w-3.5 h-3.5 accent-blue-600 cursor-pointer flex-shrink-0" />
+                                    <span className="text-xs text-slate-600 flex-1">{svc.label}</span>
+                                    {s.enabled && (
+                                      <input type="number" value={s.amount} onChange={e => setServiceAmount(idx, svc.key, e.target.value)}
+                                        placeholder={String(defaultAmounts[svc.key])}
+                                        className="w-16 border border-blue-300 rounded px-1 py-0.5 text-xs text-center focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      <div className="bg-slate-700 text-white px-4 py-2 flex justify-between text-xs font-bold">
+                        <span>סה"כ ({entries.length} רשומות)</span>
+                        <span className="text-red-300">₪{fmt(totalPay)}</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1409,10 +1441,16 @@
               therapistVatM += vatOnPay;
             });
             ASSESSORS.forEach(a => {
+              const defaults = { basicDiagnosis: a.baseRate*(1+VAT_RATE), fullDiagnosis: 1500*(1+VAT_RATE), mathExp: 350, engExp: 350 };
               (assessorDataM[a.id] || []).forEach(entry => {
-                const addons = (entry.engExp ? ADDON_PRICE : 0) + (entry.mathExp ? ADDON_PRICE : 0) + (entry.fullDidactic ? ADDON_PRICE : 0);
-                totalPayM += a.baseRate * (1 + VAT_RATE) + addons;
-                assessorVatM += a.baseRate * VAT_RATE + addons * VAT_RATE / (1 + VAT_RATE);
+                ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+                  const s = entry[svc] || {};
+                  if (s.enabled) {
+                    const amount = num(s.amount) || defaults[svc];
+                    totalPayM += amount;
+                    assessorVatM += amount * VAT_RATE / (1 + VAT_RATE);
+                  }
+                });
               });
             });
             const isDan = e => DAN_CATS.includes(e.category);

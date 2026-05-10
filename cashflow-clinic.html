@@ -315,22 +315,16 @@
         let assessorPay = 0, assessorVat = 0;
         ASSESSORS.forEach(a => {
           const defaults = assessorDefaultAmounts(a);
-          if (a.noVat) {
-            (assessorData[a.id] || []).forEach(entry => {
-              assessorPay += num(entry.amount) || a.baseRate;
+          (assessorData[a.id] || []).forEach(entry => {
+            ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+              const s = entry[svc] || {};
+              if (s.enabled) {
+                const amount = num(s.amount) || defaults[svc];
+                assessorPay += amount;
+                if (!a.noVat) assessorVat += amount * VAT_RATE / (1 + VAT_RATE);
+              }
             });
-          } else {
-            (assessorData[a.id] || []).forEach(entry => {
-              ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
-                const s = entry[svc] || {};
-                if (s.enabled) {
-                  const amount = num(s.amount) || defaults[svc];
-                  assessorPay += amount;
-                  assessorVat += amount * VAT_RATE / (1 + VAT_RATE);
-                }
-              });
-            });
-          }
+          });
         });
         totalPay += assessorPay;
 
@@ -841,14 +835,12 @@
               };
 
               const addEntry = () => {
-                const newEntry = a.noVat
-                  ? { id: Date.now(), clientName: '', amount: '' }
-                  : { id: Date.now(), clientName: '',
-                      basicDiagnosis: { enabled: false, amount: '' },
-                      fullDiagnosis:  { enabled: false, amount: '' },
-                      mathExp:        { enabled: false, amount: '' },
-                      engExp:         { enabled: false, amount: '' },
-                    };
+                const newEntry = { id: Date.now(), clientName: '',
+                  basicDiagnosis: { enabled: false, amount: '' },
+                  fullDiagnosis:  { enabled: false, amount: '' },
+                  mathExp:        { enabled: false, amount: '' },
+                  engExp:         { enabled: false, amount: '' },
+                };
                 onUpdateAssessorData({ ...assessorData, [a.id]: [...entries, newEntry] });
               };
 
@@ -875,7 +867,6 @@
               };
 
               const calcEntryPay = entry => {
-                if (a.noVat) return num(entry.amount) || a.baseRate;
                 let total = 0;
                 ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
                   const s = entry[svc] || {};
@@ -914,18 +905,11 @@
                             <input value={entry.clientName} onChange={e => updateEntry(idx, 'clientName', e.target.value)}
                               placeholder="שם המאובחן"
                               className="flex-1 border border-slate-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                            {a.noVat ? (
-                              <input type="number" value={entry.amount} onChange={e => updateEntry(idx, 'amount', e.target.value)}
-                                placeholder={String(a.baseRate)}
-                                className="w-24 border border-slate-300 rounded-lg px-2 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-blue-400" />
-                            ) : (
-                              <span className="text-sm font-semibold text-red-500 whitespace-nowrap">₪{fmt(calcEntryPay(entry))}</span>
-                            )}
+                            <span className="text-sm font-semibold text-red-500 whitespace-nowrap">₪{fmt(calcEntryPay(entry))}</span>
                             <button onClick={() => removeEntry(idx)}
                               className="text-red-400 hover:text-red-600 text-xs px-1.5 py-1 rounded hover:bg-red-50 transition">✕</button>
                           </div>
-                          {!a.noVat && (
-                            <div className="grid grid-cols-2 gap-1.5 mt-2">
+                          <div className="grid grid-cols-2 gap-1.5 mt-2">
                               {[
                                 { key: 'basicDiagnosis', label: 'אבחון דידקטי' },
                                 { key: 'fullDiagnosis',  label: 'אבחון דידקטי מלא' },
@@ -947,7 +931,6 @@
                                 );
                               })}
                             </div>
-                          )}
                         </div>
                       ))}
                       <div className="bg-slate-700 text-white px-4 py-2 flex justify-between text-xs font-bold">
@@ -1463,23 +1446,17 @@
               therapistVatM += vatOnPay;
             });
             ASSESSORS.forEach(a => {
-              if (a.noVat) {
-                (assessorDataM[a.id] || []).forEach(entry => {
-                  totalPayM += num(entry.amount) || a.baseRate;
+              const defaults = { basicDiagnosis: a.noVat ? a.baseRate : a.baseRate*(1+VAT_RATE), fullDiagnosis: 1500*(1+VAT_RATE), mathExp: 350, engExp: 350 };
+              (assessorDataM[a.id] || []).forEach(entry => {
+                ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+                  const s = entry[svc] || {};
+                  if (s.enabled) {
+                    const amount = num(s.amount) || defaults[svc];
+                    totalPayM += amount;
+                    if (!a.noVat) assessorVatM += amount * VAT_RATE / (1 + VAT_RATE);
+                  }
                 });
-              } else {
-                const defaults = { basicDiagnosis: a.baseRate*(1+VAT_RATE), fullDiagnosis: 1500*(1+VAT_RATE), mathExp: 350, engExp: 350 };
-                (assessorDataM[a.id] || []).forEach(entry => {
-                  ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
-                    const s = entry[svc] || {};
-                    if (s.enabled) {
-                      const amount = num(s.amount) || defaults[svc];
-                      totalPayM += amount;
-                      assessorVatM += amount * VAT_RATE / (1 + VAT_RATE);
-                    }
-                  });
-                });
-              }
+              });
             });
             const isDan = e => DAN_CATS.includes(e.category);
             const regularExpM = expenses.reduce((s, e) => isDan(e) ? s : s + num(e.amount), 0);

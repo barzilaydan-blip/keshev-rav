@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>קשב רב – דשבורד תזרים 2025</title>
+  <title>קשב רב – דשבורד תזרים</title>
   <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
   <style>
     :root {
       --bg: #060b18;
@@ -38,220 +40,105 @@
         radial-gradient(ellipse at 80% 80%, rgba(139,92,246,0.04) 0%, transparent 60%);
     }
 
+    /* ── LOADING ── */
+    #loadingOverlay {
+      position: fixed; inset: 0;
+      background: var(--bg);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      z-index: 999;
+      gap: 16px;
+    }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 3px solid var(--border);
+      border-top-color: var(--cyan);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loadingOverlay p { color: var(--text2); font-size: 0.9rem; }
+
     /* ── HEADER ── */
     .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 32px;
-      padding-bottom: 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 32px; padding-bottom: 20px;
       border-bottom: 1px solid var(--border);
     }
     .header-title h1 {
-      font-size: 1.8rem;
-      font-weight: 800;
+      font-size: 1.8rem; font-weight: 800;
       background: linear-gradient(135deg, var(--cyan), var(--purple));
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
-    .header-title p {
-      color: var(--text2);
-      font-size: 0.85rem;
-      margin-top: 4px;
-    }
+    .header-title p { color: var(--text2); font-size: 0.85rem; margin-top: 4px; }
     .header-badge {
       background: linear-gradient(135deg, rgba(0,212,255,0.15), rgba(139,92,246,0.15));
       border: 1px solid rgba(0,212,255,0.3);
-      border-radius: 8px;
-      padding: 8px 16px;
-      font-size: 0.8rem;
-      color: var(--cyan);
-      letter-spacing: 0.05em;
+      border-radius: 8px; padding: 8px 16px;
+      font-size: 0.8rem; color: var(--cyan); letter-spacing: 0.05em;
     }
 
-    /* ── KPI CARDS ── */
-    .kpi-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-    @media (max-width: 900px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 500px) { .kpi-grid { grid-template-columns: 1fr; } }
-
+    /* ── KPI ── */
+    .kpi-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-bottom: 24px; }
+    @media (max-width:900px) { .kpi-grid { grid-template-columns: repeat(2,1fr); } }
+    @media (max-width:500px) { .kpi-grid { grid-template-columns: 1fr; } }
     .kpi-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px 22px;
-      position: relative;
-      overflow: hidden;
-      transition: transform 0.2s, box-shadow 0.2s;
+      background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px 22px; position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
     }
-    .kpi-card:hover {
-      transform: translateY(-3px);
-      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
+    .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
     .kpi-card::before {
-      content: '';
-      position: absolute;
-      top: 0; right: 0;
-      width: 60px; height: 60px;
-      border-radius: 0 14px 0 100%;
-      opacity: 0.15;
+      content: ''; position: absolute; top: 0; right: 0;
+      width: 60px; height: 60px; border-radius: 0 14px 0 100%; opacity: .15;
     }
     .kpi-card.cyan::before  { background: var(--cyan); }
     .kpi-card.green::before { background: var(--green); }
     .kpi-card.red::before   { background: var(--red); }
     .kpi-card.amber::before { background: var(--amber); }
-
-    .kpi-label {
-      font-size: 0.78rem;
-      color: var(--text3);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 8px;
-    }
-    .kpi-value {
-      font-size: 1.7rem;
-      font-weight: 800;
-      line-height: 1;
-      margin-bottom: 6px;
-    }
+    .kpi-label { font-size:.78rem; color:var(--text3); text-transform:uppercase; letter-spacing:.06em; margin-bottom:8px; }
+    .kpi-value { font-size:1.7rem; font-weight:800; line-height:1; margin-bottom:6px; }
     .kpi-card.cyan  .kpi-value { color: var(--cyan); }
     .kpi-card.green .kpi-value { color: var(--green); }
     .kpi-card.red   .kpi-value { color: var(--red); }
     .kpi-card.amber .kpi-value { color: var(--amber); }
-    .kpi-sub {
-      font-size: 0.75rem;
-      color: var(--text3);
-    }
-    .kpi-icon {
-      position: absolute;
-      top: 18px;
-      left: 18px;
-      font-size: 1.4rem;
-      opacity: 0.6;
-    }
+    .kpi-sub { font-size:.75rem; color:var(--text3); }
+    .kpi-icon { position:absolute; top:18px; left:18px; font-size:1.4rem; opacity:.6; }
 
-    /* ── CHARTS GRID ── */
+    /* ── CHARTS ── */
     .main-chart-wrap {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px;
-      margin-bottom: 24px;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 24px; margin-bottom: 24px;
     }
-    .section-title {
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 6px;
-    }
-    .section-sub {
-      font-size: 0.76rem;
-      color: var(--text3);
-      margin-bottom: 20px;
-    }
+    .section-title { font-size:1rem; font-weight:700; color:var(--text); margin-bottom:6px; }
+    .section-sub   { font-size:.76rem; color:var(--text3); margin-bottom:20px; }
     .chart-container { position: relative; }
-
-    .bottom-grid {
-      display: grid;
-      grid-template-columns: 420px 1fr;
-      gap: 20px;
-    }
-    @media (max-width: 960px) { .bottom-grid { grid-template-columns: 1fr; } }
-
-    .chart-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 24px;
-    }
+    .bottom-grid { display:grid; grid-template-columns:420px 1fr; gap:20px; }
+    @media (max-width:960px) { .bottom-grid { grid-template-columns:1fr; } }
+    .chart-card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; }
 
     /* ── TABLE ── */
-    .top-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.82rem;
-    }
+    .top-table { width:100%; border-collapse:collapse; font-size:.82rem; }
     .top-table thead th {
-      color: var(--text3);
-      font-weight: 600;
-      text-align: right;
-      padding: 10px 12px;
-      border-bottom: 1px solid var(--border);
-      letter-spacing: 0.04em;
-      font-size: 0.74rem;
-      text-transform: uppercase;
+      color:var(--text3); font-weight:600; text-align:right;
+      padding:10px 12px; border-bottom:1px solid var(--border);
+      letter-spacing:.04em; font-size:.74rem; text-transform:uppercase;
     }
-    .top-table tbody tr {
-      transition: background 0.15s;
-    }
-    .top-table tbody tr:hover { background: rgba(255,255,255,0.03); }
-    .top-table tbody td {
-      padding: 10px 12px;
-      border-bottom: 1px solid rgba(30,58,95,0.5);
-      color: var(--text);
-      vertical-align: middle;
-    }
-    .top-table tbody tr:last-child td { border-bottom: none; }
-    .rank-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px; height: 22px;
-      border-radius: 6px;
-      font-weight: 700;
-      font-size: 0.72rem;
-    }
-    .rank-1 { background: rgba(245,158,11,0.2); color: var(--amber); }
-    .rank-2 { background: rgba(148,163,184,0.15); color: #94a3b8; }
-    .rank-3 { background: rgba(251,146,60,0.15); color: #fb923c; }
-    .rank-other { background: rgba(100,116,139,0.15); color: var(--text3); }
+    .top-table tbody tr { transition:background .15s; }
+    .top-table tbody tr:hover { background:rgba(255,255,255,0.03); }
+    .top-table tbody td { padding:10px 12px; border-bottom:1px solid rgba(30,58,95,.5); color:var(--text); vertical-align:middle; }
+    .top-table tbody tr:last-child td { border-bottom:none; }
+    .rank-badge { display:inline-flex; align-items:center; justify-content:center; width:22px; height:22px; border-radius:6px; font-weight:700; font-size:.72rem; }
+    .rank-1 { background:rgba(245,158,11,.2); color:var(--amber); }
+    .rank-2 { background:rgba(148,163,184,.15); color:#94a3b8; }
+    .rank-3 { background:rgba(251,146,60,.15); color:#fb923c; }
+    .rank-other { background:rgba(100,116,139,.15); color:var(--text3); }
+    .amount-cell { font-weight:700; font-variant-numeric:tabular-nums; text-align:left; direction:ltr; }
+    .bar-bg { background:rgba(255,255,255,.06); border-radius:4px; height:6px; margin-top:4px; overflow:hidden; }
+    .bar-fill { height:100%; border-radius:4px; }
+    .cat-dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-left:7px; flex-shrink:0; }
 
-    .amount-cell {
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      text-align: left;
-      direction: ltr;
-    }
-    .bar-bg {
-      background: rgba(255,255,255,0.06);
-      border-radius: 4px;
-      height: 6px;
-      margin-top: 4px;
-      overflow: hidden;
-    }
-    .bar-fill {
-      height: 100%;
-      border-radius: 4px;
-      background: linear-gradient(90deg, var(--cyan), var(--purple));
-    }
-
-    .cat-dot {
-      display: inline-block;
-      width: 9px; height: 9px;
-      border-radius: 50%;
-      margin-left: 7px;
-      flex-shrink: 0;
-    }
-
-    /* ── FOOTNOTE ── */
-    .footnote {
-      margin-top: 20px;
-      padding: 12px 16px;
-      background: rgba(245,158,11,0.06);
-      border: 1px solid rgba(245,158,11,0.2);
-      border-radius: 10px;
-      font-size: 0.75rem;
-      color: var(--text3);
-      line-height: 1.6;
-    }
-    .footnote strong { color: var(--amber); }
-
-    /* ── ALERTS SECTION ── */
+    /* ── ALERTS ── */
     .alerts-section { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:24px; margin-bottom:24px; }
     .alerts-header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; gap:16px; }
     .alerts-title-group { display:flex; align-items:flex-start; gap:12px; }
@@ -278,55 +165,68 @@
     .alert-card__note { font-size:.7rem; color:var(--text3); margin-top:6px; font-style:italic; }
     @media(max-width:700px){ .alerts-grid{grid-template-columns:1fr} .alerts-header{flex-direction:column} }
 
-    /* scrollbar */
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: var(--bg2); }
-    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    /* ── FOOTNOTE ── */
+    .footnote {
+      margin-top: 20px; padding: 12px 16px;
+      background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2);
+      border-radius: 10px; font-size: .75rem; color: var(--text3); line-height: 1.6;
+    }
+    .footnote strong { color: var(--amber); }
+
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:var(--bg2); }
+    ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
   </style>
 </head>
 <body>
+
+  <!-- LOADING -->
+  <div id="loadingOverlay">
+    <div class="spinner"></div>
+    <p>טוען נתונים מ-Firebase...</p>
+  </div>
 
   <!-- HEADER -->
   <div class="header">
     <div class="header-title">
       <h1>קשב רב · דשבורד תזרים</h1>
-      <p>ניתוח הכנסות והוצאות · שנת 2025 · נתונים מגיליון "תזרים 2025"</p>
+      <p id="headerSub">ניתוח הכנסות והוצאות · טוען...</p>
     </div>
-    <div class="header-badge">&#x20AA; שנת 2025</div>
+    <div class="header-badge" id="headerBadge">&#x20AA; טוען...</div>
   </div>
 
   <!-- KPI CARDS -->
   <div class="kpi-grid">
     <div class="kpi-card cyan">
       <div class="kpi-label">סה"כ הכנסות</div>
-      <div class="kpi-value">1,303,658</div>
-      <div class="kpi-sub">₪ · כל 12 חודשים</div>
+      <div class="kpi-value" id="kpiTotalRev">—</div>
+      <div class="kpi-sub" id="kpiTotalRevSub">₪ · טוען...</div>
       <div class="kpi-icon">📈</div>
     </div>
     <div class="kpi-card red">
-      <div class="kpi-label">סה"כ הוצאות (ידועות)</div>
-      <div class="kpi-value">995,001</div>
-      <div class="kpi-sub">₪ · כולל שכר ומיסים חלקי</div>
+      <div class="kpi-label">סה"כ הוצאות</div>
+      <div class="kpi-value" id="kpiTotalExp">—</div>
+      <div class="kpi-sub">₪ · כולל שכר מטפלים</div>
       <div class="kpi-icon">📉</div>
     </div>
     <div class="kpi-card green">
       <div class="kpi-label">ממוצע הכנסה חודשית</div>
-      <div class="kpi-value">108,638</div>
-      <div class="kpi-sub">₪ · ממוצע שנתי</div>
+      <div class="kpi-value" id="kpiAvg">—</div>
+      <div class="kpi-sub">₪ · חודשים עם נתונים</div>
       <div class="kpi-icon">💡</div>
     </div>
     <div class="kpi-card amber">
-      <div class="kpi-label">חודש שיא / שפל</div>
-      <div class="kpi-value">יולי</div>
-      <div class="kpi-sub">₪ 152,434 / שפל: אוקטובר ₪ 69,403</div>
-      <div class="kpi-icon">🏆</div>
+      <div class="kpi-label">רווח / הפסד מצטבר</div>
+      <div class="kpi-value" id="kpiNet">—</div>
+      <div class="kpi-sub" id="kpiNetSub">₪</div>
+      <div class="kpi-icon">⚖️</div>
     </div>
   </div>
 
   <!-- MONTHLY BAR CHART -->
   <div class="main-chart-wrap">
-    <div class="section-title">הוצאות חודשיות לפי קטגוריה · מול הכנסות</div>
-    <div class="section-sub">* נתוני שכר זמינים לינואר–ספטמבר בלבד · נתוני מיסים זמינים לינואר–אוגוסט בלבד</div>
+    <div class="section-title">הכנסות מול הוצאות · חודשי</div>
+    <div class="section-sub" id="chartSub">טוען נתונים...</div>
     <div class="chart-container" style="height:340px;">
       <canvas id="monthlyChart"></canvas>
     </div>
@@ -334,8 +234,6 @@
 
   <!-- BOTTOM GRID -->
   <div class="bottom-grid">
-
-    <!-- PIE CHART -->
     <div class="chart-card">
       <div class="section-title">חלוקת הוצאות לפי קטגוריה</div>
       <div class="section-sub">סה"כ שנתי לפי מקטע · ₪</div>
@@ -343,10 +241,8 @@
         <canvas id="pieChart"></canvas>
       </div>
     </div>
-
-    <!-- TOP EXPENSES TABLE -->
     <div class="chart-card">
-      <div class="section-title">ההוצאות הגדולות ביותר</div>
+      <div class="section-title">הוצאות גדולות לפי סעיף</div>
       <div class="section-sub">מיון יורד לפי גובה ההוצאה השנתית · ₪</div>
       <table class="top-table">
         <thead>
@@ -362,14 +258,14 @@
     </div>
   </div>
 
-  <!-- ALERTS SECTION -->
+  <!-- ALERTS -->
   <div class="alerts-section">
     <div class="alerts-header">
       <div class="alerts-title-group">
         <span class="alerts-icon">&#x26A0;</span>
         <div>
           <div class="section-title" style="margin-bottom:2px;">התראות הוצאות חסרות / לא מתועדות</div>
-          <div class="section-sub" style="margin-bottom:0;">מעקב אוטומטי · הוצאות קבועות ללא תיעוד מחודש מאי 2025</div>
+          <div class="section-sub" style="margin-bottom:0;" id="alertsSubtitle">מעקב אוטומטי · הוצאות קבועות ללא תיעוד</div>
         </div>
       </div>
       <div class="alerts-summary" id="alertsSummary"></div>
@@ -377,120 +273,250 @@
     <div class="alerts-grid" id="alertsGrid"></div>
   </div>
 
-  <div class="footnote">
-    <strong>⚠ הערת נתונים:</strong> נתוני שכר מטפלים, שכר אדמיניסטרציה ופנסיה זמינים בגיליון לחודשים ינואר–ספטמבר בלבד.
-    נתוני מיסים (מע"מ, מס הכנסה, ביטוח לאומי) זמינים לינואר–אוגוסט בלבד.
-    כל שאר ההוצאות התפעוליות מחושבות לכל 12 החודשים. הנתונים לקוחים ישירות מלשונית <strong>"תזרים 2025"</strong>.
+  <div class="footnote" id="footnote">
+    <strong>⚠ הערה:</strong> הנתונים נטענים מ-Firebase בזמן אמת — כל מה שהוזן באפליקציה מופיע כאן.
+    הכנסה = דוח חשבוניות + הכנסות מיוחדות. הוצאות = מטפלים + מאבחנות + הוצאות תפעוליות.
   </div>
 
   <script>
-    // ─────────────────────────────────────────
-    // ALERTS DATA
-    // ─────────────────────────────────────────
-    // החודש הנוכחי (0=ינואר) — בודקים רק חודשים שכבר עברו
-    const CURRENT_MONTH = new Date().getMonth(); // לא כולל החודש הנוכחי
+    // ─── Firebase ───────────────────────────────────────────────────────────────
+    const firebaseConfig = {
+      apiKey: "AIzaSyBG7zf680kZvhHJBUbXOUVcWuHxniX3fUg",
+      authDomain: "keshev-rav.firebaseapp.com",
+      databaseURL: "https://keshev-rav-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "keshev-rav",
+      storageBucket: "keshev-rav.firebasestorage.app",
+      messagingSenderId: "94450643941",
+      appId: "1:94450643941:web:52bc8fa93720bc57dbf50c",
+    };
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-    const EXPENSE_REGISTRY = [
-      // MONTHLY (*)
-      { name: 'שכירות',          type: 'monthly',   values: [12600,11800,11800,11800,11800,11800,11800,11800,12272,12272,12272,12272] },
-      { name: 'בזק',             type: 'monthly',   values: [128.19,124.84,124.84,124.84,124.84,124.84,124.84,124.84,137.68,167.63,167,163.3] },
-      { name: 'טלפון נייד עסק',  type: 'monthly',   values: [40.24,40.48,40.58,40.42,40.42,40.42,40.24,40.24,40.24,40.24,40.24,40.24] },
-      { name: 'עמלות אשראי',     type: 'monthly',   values: [1126,1401,1079,1233,1246.85,1119.78,953.82,1838,1500,1477,0,0] },
-      { name: 'גינון',            type: 'monthly',   values: [0,0,0,1770,0,0,700,350,354,0,0,0] },
-      { name: 'מנקה',             type: 'monthly',   values: [150,766,766,574,766,574,766,766,766,766,766,766] },
-      { name: 'הנהלת חשבונות',   type: 'monthly',   values: [445,445,445,445,445,445,445,445,445,445,445,445] },
-      { name: 'טיפולוג / ראפיד', type: 'monthly',   values: [618.2,618.2,618.2,618.2,618.2,618.2,618.2,618.2,718.73,718.73,718.73,718.73] },
-      { name: 'SMOOVE',           type: 'monthly',   values: [211.22,211.22,211.22,209.43,258.24,258.42,258.42,258.42,258.42,258.42,258.42,0] },
-      { name: 'Zoom',             type: 'monthly',   values: [58,58,58,58,58,58,58,58,58,58,58,0] },
-      { name: 'ChatGPT',          type: 'monthly',   values: [72,72,72,72,72,67.2,67.2,67.2,67.2,67.2,67.2,0] },
-      { name: 'Claude',           type: 'monthly',   values: [0,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'Spotify',          type: 'monthly',   values: [29.9,29.9,29.9,29.9,29.9,35.9,35.9,0,0,0,0,0] },
-      { name: 'Google',           type: 'monthly',   values: [23.9,12,12,43,43,43,43,12,12,12,0,0] },
-      { name: 'הדרכה מקצועית',   type: 'monthly',   values: [0,0,1200,0,0,0,1200,0,2950,0,0,0] },
-      { name: 'שטיפת רכב',       type: 'monthly',   values: [55,55,55,55,55,99,99,99,99,149,99,0] },
-      { name: 'נייד דן',          type: 'monthly',   values: [67.9,123,68.48,68.48,68.48,68,232,76.65,40.24,40.24,89,89] },
-      { name: 'הוט כבלים',        type: 'monthly',   values: [132.1,131,131,131,131,131,131,131,151,151,0,0] },
-      // BI-MONTHLY (**)
-      { name: 'חשמל',             type: 'bimonthly', values: [941.34,0,1986.61,0,684.43,0,1466.34,0,1997.27,0,1005.72,1057] },
-      // ANNUAL (***)
-      { name: 'ביטוח מרפאה',          type: 'annual', values: [0,0,0,0,0,0,0,0,2692,0,0,0] },
-      { name: 'ביטוח אחריות מקצועית', type: 'annual', values: [0,0,0,0,0,0,0,0,0,0,0,455] },
-      { name: 'ביטוח רכב',            type: 'annual', values: [0,0,5794,0,0,0,0,0,0,0,0,0] },
-      { name: 'Wix',                   type: 'annual', values: [1116,0,0,0,0,0,0,0,0,0,0,0] },
-      { name: 'Canva',                 type: 'annual', values: [0,0,0,0,0,0,400,0,0,0,0,0] },
+    // ─── CONSTANTS ──────────────────────────────────────────────────────────────
+    const YEAR       = new Date().getFullYear();
+    const VAT_RATE   = 0.18;
+    const DAN_CATS   = ['הוצאות דן שוטפות', 'הוצאות דן חד פעמי', 'מיסים'];
+    const MONTH_NAMES= ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    const ASSESSORS  = [
+      { id: 'sivan', name: 'סיון גמובוש', baseRate: 1300 },
+      { id: 'lital', name: 'ליטל דכס',   baseRate: 1200 },
+    ];
+    const DEFAULT_THERAPISTS = [
+      { id:1,  name:'איריס סער',      therapistRate:190, instituteProfit:132 },
+      { id:2,  name:'עינת בן הרוש',   therapistRate:190, instituteProfit:132 },
+      { id:3,  name:'לירית מטלון',    therapistRate:190, instituteProfit:132 },
+      { id:4,  name:'יעל ליפקין',     therapistRate:190, instituteProfit:132 },
+      { id:5,  name:'הינדי שמעיה',    therapistRate:190, instituteProfit:132 },
+      { id:6,  name:'אליה בקרמן',     therapistRate:190, instituteProfit:132 },
+      { id:7,  name:'אסף דרייפוס',    therapistRate:225, instituteProfit:97,  issuesInvoice:true },
+      { id:8,  name:'חנה ללוש',       therapistRate:190, instituteProfit:132 },
+      { id:9,  name:'יהודית חגינסקי', therapistRate:190, instituteProfit:132 },
+      { id:10, name:'סיגלית ברזילי',  therapistRate:190, instituteProfit:132, issuesInvoice:true },
+      { id:11, name:'מיכל סילבר',     therapistRate:190, instituteProfit:132 },
+      { id:12, name:'דנה ראובני',     therapistRate:190, instituteProfit:132 },
+      { id:13, name:'רותם פלדמוס',    therapistRate:190, instituteProfit:132 },
     ];
 
-    // ─────────────────────────────────────────
-    // ALERTS LOGIC
-    // ─────────────────────────────────────────
-    function generateAlerts() {
-      const MONTHS_HE = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+    // קטגוריות הוצאות עם צבעים לגרף עוגה
+    const CAT_COLORS = {
+      'שכר מטפלים ומאבחנים': '#8b5cf6',
+      'הוצאות אחזקה שוטף':   '#00d4ff',
+      'מחשוב':               '#f59e0b',
+      'ביטוח':               '#14b8a6',
+      'הכשרה מקצועית':       '#fb923c',
+      'הוצאות חד פעמיות':    '#a3e635',
+      'פרסום':               '#ec4899',
+      'הוצאות דן שוטפות':    '#64748b',
+      'הוצאות דן חד פעמי':   '#475569',
+      'מיסים':               '#f43f5e',
+      'אחר':                 '#94a3b8',
+    };
+
+    // הוצאות קבועות לניטור התראות
+    const EXPENSE_REGISTRY = [
+      { name:'שכירות',         aliases:['שכירות'],               type:'monthly'   },
+      { name:'בזק',            aliases:['בזק'],                  type:'monthly'   },
+      { name:'טלפון נייד עסק', aliases:['טלפון נייד','נייד עסק'],type:'monthly'   },
+      { name:'עמלות אשראי',    aliases:['עמלות אשראי'],          type:'monthly'   },
+      { name:'גינון',          aliases:['גינון'],                 type:'monthly'   },
+      { name:'מנקה',           aliases:['מנקה'],                  type:'monthly'   },
+      { name:'הנהלת חשבונות',  aliases:['הנהלת חשבונות'],        type:'monthly'   },
+      { name:'טיפולוג / ראפיד',aliases:['טיפולוג','ראפיד'],      type:'monthly'   },
+      { name:'SMOOVE',         aliases:['SMOOVE','smoove'],       type:'monthly'   },
+      { name:'Zoom',           aliases:['Zoom','zoom'],           type:'monthly'   },
+      { name:'ChatGPT',        aliases:['ChatGPT','chatgpt'],     type:'monthly'   },
+      { name:'Claude',         aliases:['Claude','claude'],       type:'monthly'   },
+      { name:'Spotify',        aliases:['Spotify','spotify'],     type:'monthly'   },
+      { name:'Google',         aliases:['Google','google'],       type:'monthly'   },
+      { name:'הדרכה מקצועית',  aliases:['הדרכה מקצועית'],        type:'monthly'   },
+      { name:'שטיפת רכב',      aliases:['שטיפת רכב'],            type:'monthly'   },
+      { name:'נייד דן',        aliases:['נייד דן'],               type:'monthly'   },
+      { name:'הוט כבלים',      aliases:['הוט','כבלים'],          type:'monthly'   },
+      { name:'חשמל',           aliases:['חשמל'],                  type:'bimonthly' },
+      { name:'ביטוח מרפאה',    aliases:['ביטוח מרפאה'],          type:'annual'    },
+      { name:'ביטוח אחריות',   aliases:['ביטוח אחריות'],         type:'annual'    },
+      { name:'ביטוח רכב',      aliases:['ביטוח רכב'],            type:'annual'    },
+      { name:'Wix',            aliases:['Wix','wix'],             type:'annual'    },
+      { name:'Canva',          aliases:['Canva','canva'],         type:'annual'    },
+    ];
+
+    // ─── HELPERS ────────────────────────────────────────────────────────────────
+    const num = v => parseFloat(v) || 0;
+    const fmt = v => Math.round(v).toLocaleString('he-IL');
+
+    function fbParse(v) {
+      if (!v) return null;
+      if (typeof v === 'string') { try { return JSON.parse(v); } catch { return v; } }
+      return v;
+    }
+
+    const emptyMonth = () => ({
+      therapistData: {}, assessorData: { sivan: [], lital: [] },
+      expenses: [],
+      income: { invoiceReport:'', finalVat:'', specialIncome:{}, specialExpense:{}, myWork:{} },
+    });
+
+    const monthKey = m => `cf_month_${YEAR}_${String(m).padStart(2,'0')}`;
+
+    // ─── CALC PER MONTH ─────────────────────────────────────────────────────────
+    function calcMonth(mData, therapists) {
+      const income       = mData.income       || {};
+      const expenses     = mData.expenses     || [];
+      const therapistData= mData.therapistData|| {};
+      const assessorData = mData.assessorData || {};
+
+      const specialInc = num((income.specialIncome  || {}).amount);
+      const specialExp = num((income.specialExpense || {}).amount);
+      const revenue    = num(income.invoiceReport) + specialInc;
+
+      // שכר מטפלים
+      let therapistPay = 0;
+      therapists.forEach(t => {
+        const d    = therapistData[t.id] || {};
+        const h    = num(d.hours);
+        const base = h * t.therapistRate;
+        const pay  = t.issuesInvoice ? base * (1 + VAT_RATE) : base;
+        therapistPay += pay + num(d.bonus);
+      });
+
+      // שכר מאבחנות
+      let assessorPay = 0;
+      ASSESSORS.forEach(a => {
+        const entries = assessorData[a.id] || [];
+        const defaults = {
+          basicDiagnosis: Math.round(a.baseRate * (1 + VAT_RATE)),
+          fullDiagnosis:  Math.round(1500 * (1 + VAT_RATE)),
+          mathExp: 350, engExp: 350,
+        };
+        entries.forEach(e => {
+          assessorPay += num(e.basicDiagnosis || defaults.basicDiagnosis)
+                       + num(e.fullDiagnosis  || 0)
+                       + num(e.mathExp        || 0)
+                       + num(e.engExp         || 0);
+        });
+      });
+
+      // הוצאות תפעוליות (ללא דן ומיסים)
+      const opExp = expenses.reduce((s, e) =>
+        DAN_CATS.includes(e.category) ? s : s + num(e.amount), 0);
+
+      const totalSalary = therapistPay + assessorPay;
+      const totalExp    = totalSalary + opExp + specialExp;
+      const net         = revenue - totalExp;
+
+      return { revenue, therapistPay, assessorPay, totalSalary, opExp, specialExp, totalExp, net, expenses };
+    }
+
+    // ─── EXPENSE REGISTRY MATCHING ──────────────────────────────────────────────
+    function expenseDocumented(monthExpenses, aliases) {
+      const norm = s => s.replace(/\s/g,'').toLowerCase();
+      return monthExpenses.some(e => {
+        const item = norm(e.item || '');
+        return aliases.some(a => item.includes(norm(a)) || norm(a).includes(item));
+      });
+    }
+
+    // ─── ALERTS ─────────────────────────────────────────────────────────────────
+    function generateAlerts(monthsData) {
+      const CURRENT_MONTH = new Date().getMonth(); // 0-indexed
       const alerts = [];
 
-      EXPENSE_REGISTRY.forEach(expense => {
-        if (expense.type === 'monthly') {
+      EXPENSE_REGISTRY.forEach(reg => {
+        if (reg.type === 'monthly') {
           const missingMonths = [];
           for (let m = 0; m < CURRENT_MONTH; m++) {
-            if (!expense.values[m]) missingMonths.push(MONTHS_HE[m]);
+            const docs = expenseDocumented(monthsData[m].expenses || [], reg.aliases);
+            if (!docs) missingMonths.push(MONTH_NAMES[m]);
           }
           if (!missingMonths.length) return;
-          const allYearZero = expense.values.slice(0, CURRENT_MONTH).every(v => !v);
           const count = missingMonths.length;
-          const severity = allYearZero ? 'critical' : count >= 5 ? 'high' : count >= 2 ? 'warning' : 'info';
-          alerts.push({ name: expense.name, type: 'monthly', severity, months: missingMonths,
-                        note: allYearZero ? 'לא נרשמה הוצאה זו בחודשים שחלפו' : null });
+          const allMissing = count === CURRENT_MONTH;
+          const severity = allMissing ? 'critical' : count >= 5 ? 'high' : count >= 2 ? 'warning' : 'info';
+          alerts.push({ name: reg.name, type: 'monthly', severity, months: missingMonths,
+                        note: allMissing ? 'לא נרשמה הוצאה זו בכל החודשים שחלפו' : null });
 
-        } else if (expense.type === 'bimonthly') {
-          let cycleBase = -1;
-          for (let m = 0; m < 12; m++) { if (expense.values[m] > 0) { cycleBase = m % 2; break; } }
-          if (cycleBase === -1) {
-            alerts.push({ name: expense.name, type: 'bimonthly', severity: 'critical', months: [],
-                          note: 'לא נמצא תשלום כלשהו בחודשים שחלפו' });
-            return;
-          }
+        } else if (reg.type === 'bimonthly') {
           const missingMonths = [];
-          for (let m = 0; m < CURRENT_MONTH; m++) {
-            if (m % 2 === cycleBase && !expense.values[m]) missingMonths.push(MONTHS_HE[m]);
+          for (let m = 1; m < CURRENT_MONTH; m += 2) {
+            const docs = expenseDocumented(monthsData[m].expenses || [], reg.aliases)
+                      || expenseDocumented(monthsData[m-1].expenses || [], reg.aliases);
+            if (!docs) missingMonths.push(MONTH_NAMES[m]);
           }
           if (!missingMonths.length) return;
-          alerts.push({ name: expense.name, type: 'bimonthly',
+          alerts.push({ name: reg.name, type: 'bimonthly',
                         severity: missingMonths.length >= 2 ? 'high' : 'warning', months: missingMonths });
 
-        } else if (expense.type === 'annual') {
-          if (!expense.values.some(v => v > 0)) {
-            alerts.push({ name: expense.name, type: 'annual', severity: 'critical', months: [],
-                          note: 'לא נרשם תשלום שנתי בשנת 2025' });
+        } else if (reg.type === 'annual') {
+          const anyDoc = monthsData.some((md, i) =>
+            i < CURRENT_MONTH && expenseDocumented(md.expenses || [], reg.aliases)
+          );
+          if (!anyDoc && CURRENT_MONTH >= 3) {
+            alerts.push({ name: reg.name, type: 'annual', severity: 'warning', months: [],
+                          note: 'לא תועד תשלום שנתי עד כה' });
           }
         }
       });
 
-      const order = { critical: 0, high: 1, warning: 2, info: 3 };
-      alerts.sort((a, b) => order[a.severity] - order[b.severity]);
+      const order = { critical:0, high:1, warning:2, info:3 };
+      alerts.sort((a,b) => order[a.severity] - order[b.severity]);
       return alerts;
     }
 
-    function renderAlerts() {
-      const alerts = generateAlerts();
-      const grid = document.getElementById('alertsGrid');
-      const summaryEl = document.getElementById('alertsSummary');
-      const counts = { critical: 0, high: 0, warning: 0, info: 0 };
+    function renderAlerts(monthsData) {
+      const alerts   = generateAlerts(monthsData);
+      const grid     = document.getElementById('alertsGrid');
+      const summaryEl= document.getElementById('alertsSummary');
+      const subtitle = document.getElementById('alertsSubtitle');
+
+      const CURRENT_MONTH = new Date().getMonth();
+      subtitle.textContent = `מעקב אוטומטי · בודק ${CURRENT_MONTH} חודשים שחלפו (ינואר–${MONTH_NAMES[CURRENT_MONTH-1]})`;
+
+      const counts = { critical:0, high:0, warning:0, info:0 };
       alerts.forEach(a => counts[a.severity]++);
       const parts = [];
       if (counts.critical) parts.push(`<span style="color:var(--red)">${counts.critical} קריטי</span>`);
       if (counts.high)     parts.push(`<span style="color:var(--amber)">${counts.high} גבוה</span>`);
       if (counts.warning)  parts.push(`<span style="color:var(--cyan)">${counts.warning} אזהרה</span>`);
       if (counts.info)     parts.push(`<span style="color:var(--purple)">${counts.info} מידע</span>`);
-      summaryEl.innerHTML = `${alerts.length} התראות &nbsp;·&nbsp; ${parts.join(' &nbsp;·&nbsp; ')}`;
+      summaryEl.innerHTML = alerts.length
+        ? `${alerts.length} התראות &nbsp;·&nbsp; ${parts.join(' &nbsp;·&nbsp; ')}`
+        : `<span style="color:var(--green)">✓ אין התראות פתוחות</span>`;
 
-      const sevLabels  = { critical: 'קריטי', high: 'גבוה', warning: 'אזהרה', info: 'מידע' };
-      const typeLabels = { monthly: 'חוזר חודשי', bimonthly: 'דו-חודשי', annual: 'שנתי' };
+      const sevLabels  = { critical:'קריטי', high:'גבוה', warning:'אזהרה', info:'מידע' };
+      const typeLabels = { monthly:'חוזר חודשי', bimonthly:'דו-חודשי', annual:'שנתי' };
       grid.innerHTML = '';
+
+      if (!alerts.length) {
+        grid.innerHTML = `<div style="color:var(--green);font-size:.9rem;padding:8px 0;">✓ כל ההוצאות הקבועות מתועדות</div>`;
+        return;
+      }
+
       alerts.forEach(a => {
         const card = document.createElement('div');
         card.className = `alert-card alert-card--${a.severity}`;
         const monthsHTML = a.months.length
           ? a.months.map(m => `<span class="alert-month-pill">${m}</span>`).join('')
-          : `<span class="alert-no-data-tag">אין נתון לכל 2025</span>`;
+          : `<span class="alert-no-data-tag">אין נתון לחודשים שחלפו</span>`;
         card.innerHTML = `
           <div class="alert-card__header">
             <span class="alert-severity-badge alert-severity-badge--${a.severity}">${sevLabels[a.severity]}</span>
@@ -503,230 +529,182 @@
       });
     }
 
-    // הרץ התראות מיד – לפני הגרפים, ללא תלות ב-Chart.js
-    renderAlerts();
+    // ─── MAIN INIT ──────────────────────────────────────────────────────────────
+    async function init() {
+      try {
+        // טעינת כל הנתונים במקביל
+        const keys = ['cf_therapists', ...Array.from({length:12}, (_,i) => monthKey(i+1))];
+        const snaps = await Promise.all(keys.map(k => db.ref(`kashav/${k}`).once('value')));
 
-    // ─────────────────────────────────────────
-    // DATA
-    // ─────────────────────────────────────────
-    const months = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+        const therapists  = fbParse(snaps[0].val()) || DEFAULT_THERAPISTS;
+        const monthsRaw   = snaps.slice(1).map(s => fbParse(s.val()) || emptyMonth());
 
-    const revenue   = [98026, 115925, 109708, 79142, 94262, 99665, 152434, 99177, 126556, 69403, 127156, 132204];
-    const opEx      = [22273, 17075,  29805,  19873, 19862, 17330, 23106,  22288,  31356,  23687, 20146,  26097];
-    const salaryEx  = [57293, 50460,  56309,  43467, 52228, 36713, 71422,  54760,  55664,  null,  null,   null];
-    const taxEx     = [26994, 31661,  29388,  28794, 28140, 28413, 43401,  26996,  null,   null,  null,   null];
+        // חישוב לכל חודש
+        const computed = monthsRaw.map(m => calcMonth(m, therapists));
 
-    const PIE_LABELS  = [
-      'שכר מטפלים ומאבחנים',
-      'מיסים, מע"מ וביטוח לאומי',
-      'שכירות',
-      'שכר אדמיניסטרציה ופנסיה',
-      'תוכנה וניהול',
-      'הוצאות תפעוליות שוטפות',
-      'ציוד ומחשוב',
-      'רכב ואישיות',
-      'הכשרה מקצועית',
-      'ביטוחים'
-    ];
-    const PIE_VALUES = [424493, 243787, 144288, 53823, 38583, 37061, 19376, 17138, 13976, 3147];
-    const PIE_COLORS = [
-      '#8b5cf6', '#f43f5e', '#00d4ff', '#14b8a6',
-      '#f59e0b', '#3b82f6', '#ec4899', '#a3e635',
-      '#fb923c', '#94a3b8'
-    ];
+        // ─── KPI ───────────────────────────────────────────────────────────────
+        const withData    = computed.filter(m => m.revenue > 0);
+        const totalRev    = computed.reduce((s,m) => s + m.revenue, 0);
+        const totalExp    = computed.reduce((s,m) => s + m.totalExp, 0);
+        const totalNet    = totalRev - totalExp;
+        const avgMonthly  = withData.length ? withData.reduce((s,m) => s + m.revenue, 0) / withData.length : 0;
 
-    const TOP_ITEMS = [
-      { name: 'שכר מטפלים', cat: 'שכר', color: '#8b5cf6', amount: 386443 },
-      { name: 'שכירות',      cat: 'נדל"ן', color: '#00d4ff', amount: 144288 },
-      { name: 'מע"מ סופי',   cat: 'מיסים', color: '#f43f5e', amount: 107821 },
-      { name: 'מס הכנסה',    cat: 'מיסים', color: '#f43f5e', amount: 69566  },
-      { name: 'ביטוח לאומי דן', cat: 'ביטוח לאומי', color: '#fb923c', amount: 66400 },
-      { name: 'שכר אדמין + פנסיה', cat: 'שכר', color: '#8b5cf6', amount: 53823 },
-      { name: 'שכר מאבחנות', cat: 'שכר', color: '#8b5cf6', amount: 38050 },
-      { name: 'תוכנה וניהול', cat: 'דיגיטל', color: '#f59e0b', amount: 38583 },
-      { name: 'עמלות אשראי',  cat: 'בנקאות', color: '#3b82f6', amount: 12975 },
-      { name: 'ציוד לקליניקה', cat: 'ציוד', color: '#a3e635', amount: 7876  },
-      { name: 'טיפולוג',      cat: 'תוכנה', color: '#f59e0b', amount: 7821  },
-      { name: 'מיחשוב',       cat: 'ציוד', color: '#a3e635', amount: 8588  },
-      { name: 'מנקה',         cat: 'תפעול', color: '#14b8a6', amount: 8192  },
-      { name: 'הכשרה לצוות',  cat: 'הכשרה', color: '#ec4899', amount: 5900  },
-      { name: 'כיבוד ומכולת', cat: 'תפעול', color: '#14b8a6', amount: 6183  },
-    ];
+        document.getElementById('kpiTotalRev').textContent    = fmt(totalRev);
+        document.getElementById('kpiTotalRevSub').textContent = `₪ · ${withData.length} חודשים עם נתונים`;
+        document.getElementById('kpiTotalExp').textContent    = fmt(totalExp);
+        document.getElementById('kpiAvg').textContent         = fmt(avgMonthly);
+        document.getElementById('kpiNet').textContent         = (totalNet >= 0 ? '+' : '') + fmt(totalNet);
+        document.getElementById('kpiNetSub').textContent      = '₪ · ' + (totalNet >= 0 ? 'רווח מצטבר' : 'הפסד מצטבר');
 
-    // ─────────────────────────────────────────
-    // CHART.JS DEFAULTS
-    // ─────────────────────────────────────────
-    Chart.defaults.font.family = "'Heebo', sans-serif";
-    Chart.defaults.color = '#64748b';
+        const yearLabel = YEAR;
+        document.getElementById('headerSub').textContent  = `ניתוח הכנסות והוצאות · שנת ${yearLabel} · נתונים מ-Firebase`;
+        document.getElementById('headerBadge').textContent= `₪ שנת ${yearLabel}`;
+        document.getElementById('chartSub').textContent   = `שנת ${yearLabel} · נתוני Firebase בזמן אמת`;
 
-    // ─────────────────────────────────────────
-    // 1. MONTHLY BAR + LINE CHART
-    // ─────────────────────────────────────────
-    new Chart(document.getElementById('monthlyChart'), {
-      data: {
-        labels: months,
-        datasets: [
-          {
-            type: 'bar',
-            label: 'הוצאות תפעוליות',
-            data: opEx,
-            backgroundColor: 'rgba(20,184,166,0.75)',
-            stack: 'expenses',
-            order: 3,
-            borderRadius: 3
+        // ─── MONTHLY CHART ─────────────────────────────────────────────────────
+        Chart.defaults.font.family = "'Heebo', sans-serif";
+        Chart.defaults.color = '#64748b';
+
+        const revenue    = computed.map(m => m.revenue    || null);
+        const salaryEx   = computed.map(m => m.totalSalary|| null);
+        const opEx       = computed.map(m => m.opExp      || null);
+
+        new Chart(document.getElementById('monthlyChart'), {
+          data: {
+            labels: MONTH_NAMES,
+            datasets: [
+              { type:'bar',  label:'הוצאות תפעוליות',      data:opEx,     backgroundColor:'rgba(20,184,166,0.75)', stack:'expenses', order:2, borderRadius:3 },
+              { type:'bar',  label:'שכר מטפלים ומאבחנות',  data:salaryEx, backgroundColor:'rgba(139,92,246,0.75)', stack:'expenses', order:1, borderRadius:3 },
+              { type:'line', label:'הכנסות',               data:revenue,  borderColor:'#00d4ff', backgroundColor:'rgba(0,212,255,0.08)',
+                borderWidth:2.5, pointBackgroundColor:'#00d4ff', pointRadius:5, pointHoverRadius:7,
+                tension:0.35, fill:false, order:0 },
+            ]
           },
-          {
-            type: 'bar',
-            label: 'שכר (מטפלים + אדמין)',
-            data: salaryEx,
-            backgroundColor: 'rgba(139,92,246,0.75)',
-            stack: 'expenses',
-            order: 2,
-            borderRadius: 3
-          },
-          {
-            type: 'bar',
-            label: 'מיסים, מע"מ, בטל"א',
-            data: taxEx,
-            backgroundColor: 'rgba(244,63,94,0.7)',
-            stack: 'expenses',
-            order: 1,
-            borderRadius: 3
-          },
-          {
-            type: 'line',
-            label: 'הכנסות',
-            data: revenue,
-            borderColor: '#00d4ff',
-            backgroundColor: 'rgba(0,212,255,0.08)',
-            borderWidth: 2.5,
-            pointBackgroundColor: '#00d4ff',
-            pointRadius: 5,
-            pointHoverRadius: 7,
-            tension: 0.35,
-            fill: false,
-            order: 0
-          }
-        ]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: {
-            position: 'top',
-            rtl: true,
-            labels: { color: '#94a3b8', font: { size: 12 }, padding: 20, usePointStyle: true }
-          },
-          tooltip: {
-            rtl: true,
-            backgroundColor: '#0f1c35',
-            borderColor: '#1e3a5f',
-            borderWidth: 1,
-            titleColor: '#e2e8f0',
-            bodyColor: '#94a3b8',
-            padding: 12,
-            callbacks: {
-              label: ctx => {
-                const v = ctx.raw;
-                if (v === null || v === undefined) return ` ${ctx.dataset.label}: אין נתון`;
-                return ` ${ctx.dataset.label}: ₪${v.toLocaleString('he-IL')}`;
+          options: {
+            responsive:true, maintainAspectRatio:false,
+            interaction:{ mode:'index', intersect:false },
+            plugins: {
+              legend:{ position:'top', rtl:true, labels:{ color:'#94a3b8', font:{size:12}, padding:20, usePointStyle:true } },
+              tooltip:{
+                rtl:true, backgroundColor:'#0f1c35', borderColor:'#1e3a5f', borderWidth:1,
+                titleColor:'#e2e8f0', bodyColor:'#94a3b8', padding:12,
+                callbacks:{ label: ctx => {
+                  const v = ctx.raw;
+                  if (v === null || v === undefined) return ` ${ctx.dataset.label}: אין נתון`;
+                  return ` ${ctx.dataset.label}: ₪${Math.round(v).toLocaleString('he-IL')}`;
+                }}
               }
-            }
-          }
-        },
-        scales: {
-          x: {
-            stacked: true,
-            ticks: { color: '#64748b', font: { size: 11 } },
-            grid: { color: 'rgba(255,255,255,0.04)' }
-          },
-          y: {
-            stacked: true,
-            ticks: {
-              color: '#64748b',
-              font: { size: 10 },
-              callback: v => '₪' + (v / 1000).toFixed(0) + 'K'
             },
-            grid: { color: 'rgba(255,255,255,0.05)' }
-          }
-        }
-      }
-    });
-
-    // ─────────────────────────────────────────
-    // 2. PIE CHART
-    // ─────────────────────────────────────────
-    new Chart(document.getElementById('pieChart'), {
-      type: 'doughnut',
-      data: {
-        labels: PIE_LABELS,
-        datasets: [{
-          data: PIE_VALUES,
-          backgroundColor: PIE_COLORS.map(c => c + 'CC'),
-          borderColor: PIE_COLORS,
-          borderWidth: 2,
-          hoverOffset: 10
-        }]
-      },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        cutout: '58%',
-        plugins: {
-          legend: {
-            position: 'bottom',
-            rtl: true,
-            labels: {
-              color: '#94a3b8',
-              font: { size: 10 },
-              padding: 10,
-              usePointStyle: true,
-              pointStyle: 'circle'
+            scales:{
+              x:{ stacked:true, ticks:{color:'#64748b',font:{size:11}}, grid:{color:'rgba(255,255,255,0.04)'} },
+              y:{ stacked:true, ticks:{ color:'#64748b', font:{size:10}, callback:v=>'₪'+(v/1000).toFixed(0)+'K' }, grid:{color:'rgba(255,255,255,0.05)'} }
             }
-          },
-          tooltip: {
-            rtl: true,
-            backgroundColor: '#0f1c35',
-            borderColor: '#1e3a5f',
-            borderWidth: 1,
-            titleColor: '#e2e8f0',
-            bodyColor: '#94a3b8',
-            padding: 12,
-            callbacks: {
-              label: ctx => {
-                const pct = ((ctx.raw / PIE_VALUES.reduce((a,b) => a+b, 0)) * 100).toFixed(1);
-                return ` ₪${ctx.raw.toLocaleString('he-IL')} (${pct}%)`;
+          }
+        });
+
+        // ─── PIE CHART ─────────────────────────────────────────────────────────
+        // צבירת הוצאות לפי קטגוריה
+        const catTotals = { 'שכר מטפלים ומאבחנים': 0 };
+        computed.forEach(m => { catTotals['שכר מטפלים ומאבחנים'] += m.totalSalary; });
+        monthsRaw.forEach(md => {
+          (md.expenses || []).forEach(e => {
+            const cat = e.category || 'אחר';
+            catTotals[cat] = (catTotals[cat] || 0) + num(e.amount);
+          });
+        });
+
+        const piePairs = Object.entries(catTotals)
+          .filter(([,v]) => v > 0)
+          .sort(([,a],[,b]) => b - a)
+          .slice(0, 9);
+
+        const pieLabels = piePairs.map(([k]) => k);
+        const pieValues = piePairs.map(([,v]) => Math.round(v));
+        const pieColors = pieLabels.map(l => CAT_COLORS[l] || '#94a3b8');
+
+        new Chart(document.getElementById('pieChart'), {
+          type:'doughnut',
+          data:{ labels:pieLabels, datasets:[{
+            data:pieValues,
+            backgroundColor:pieColors.map(c=>c+'CC'),
+            borderColor:pieColors, borderWidth:2, hoverOffset:10
+          }]},
+          options:{
+            responsive:true, maintainAspectRatio:false, cutout:'58%',
+            plugins:{
+              legend:{ position:'bottom', rtl:true, labels:{ color:'#94a3b8', font:{size:10}, padding:10, usePointStyle:true, pointStyle:'circle' } },
+              tooltip:{
+                rtl:true, backgroundColor:'#0f1c35', borderColor:'#1e3a5f', borderWidth:1,
+                titleColor:'#e2e8f0', bodyColor:'#94a3b8', padding:12,
+                callbacks:{ label: ctx => {
+                  const total = pieValues.reduce((a,b)=>a+b,0);
+                  const pct   = ((ctx.raw/total)*100).toFixed(1);
+                  return ` ₪${ctx.raw.toLocaleString('he-IL')} (${pct}%)`;
+                }}
               }
             }
           }
-        }
+        });
+
+        // ─── TOP TABLE ─────────────────────────────────────────────────────────
+        // צבירת הוצאות לפי פריט
+        const itemTotals = { 'שכר מטפלים': { cat:'שכר', color:'#8b5cf6', amount:0 }, 'שכר מאבחנות': { cat:'שכר', color:'#7c3aed', amount:0 } };
+        computed.forEach(m => {
+          itemTotals['שכר מטפלים'].amount  += m.therapistPay;
+          itemTotals['שכר מאבחנות'].amount += m.assessorPay;
+        });
+        monthsRaw.forEach(md => {
+          (md.expenses || []).forEach(e => {
+            const key = e.item || e.category || 'אחר';
+            if (!itemTotals[key]) itemTotals[key] = { cat: e.category || 'אחר', color: CAT_COLORS[e.category] || '#94a3b8', amount: 0 };
+            itemTotals[key].amount += num(e.amount);
+          });
+        });
+
+        const topItems = Object.entries(itemTotals)
+          .map(([name, d]) => ({ name, ...d }))
+          .filter(d => d.amount > 0)
+          .sort((a,b) => b.amount - a.amount)
+          .slice(0, 12);
+
+        const maxAmt = topItems[0]?.amount || 1;
+        const tbody  = document.getElementById('topTable');
+        topItems.forEach((item, i) => {
+          const rankClass = i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'rank-other';
+          const pct = (item.amount / maxAmt * 100).toFixed(0);
+          const tr  = document.createElement('tr');
+          tr.innerHTML = `
+            <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
+            <td>${item.name}</td>
+            <td><span style="font-size:.72rem;color:var(--text3);">
+              <span class="cat-dot" style="background:${item.color};"></span>${item.cat}
+            </span></td>
+            <td class="amount-cell">
+              <span style="color:var(--text);">₪${fmt(item.amount)}</span>
+              <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${item.color},${item.color}88);"></div></div>
+            </td>`;
+          tbody.appendChild(tr);
+        });
+
+        // ─── ALERTS ────────────────────────────────────────────────────────────
+        renderAlerts(monthsRaw);
+
+      } catch(err) {
+        console.error(err);
+        document.getElementById('loadingOverlay').innerHTML =
+          `<div style="color:var(--red);text-align:center;padding:32px;">
+            <div style="font-size:2rem;margin-bottom:12px;">⚠</div>
+            <div>שגיאה בטעינת הנתונים</div>
+            <div style="font-size:.8rem;color:var(--text3);margin-top:8px;">${err.message}</div>
+          </div>`;
+        return;
       }
-    });
 
-    // ─────────────────────────────────────────
-    // 3. TOP EXPENSES TABLE
-    // ─────────────────────────────────────────
-    const maxAmt = TOP_ITEMS[0].amount;
-    const tbody = document.getElementById('topTable');
-    TOP_ITEMS.forEach((item, i) => {
-      const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : 'rank-other';
-      const pct = (item.amount / maxAmt * 100).toFixed(0);
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td><span class="rank-badge ${rankClass}">${i + 1}</span></td>
-        <td>${item.name}</td>
-        <td><span style="font-size:0.72rem;color:var(--text3);">
-          <span class="cat-dot" style="background:${item.color};"></span>${item.cat}
-        </span></td>
-        <td class="amount-cell">
-          <span style="color:var(--text);">₪${item.amount.toLocaleString('he-IL')}</span>
-          <div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:linear-gradient(90deg,${item.color},${item.color}88);"></div></div>
-        </td>`;
-      tbody.appendChild(tr);
-    });
+      // הסר את מסך הטעינה
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
 
+    init();
   </script>
 </body>
 </html>

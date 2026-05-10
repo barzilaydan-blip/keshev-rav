@@ -387,7 +387,8 @@
     // ─────────────────────────────────────────
     // ALERTS DATA
     // ─────────────────────────────────────────
-    const ALERT_FROM_MONTH = 4; // מאי = index 4
+    // החודש הנוכחי (0=ינואר) — בודקים רק חודשים שכבר עברו
+    const CURRENT_MONTH = new Date().getMonth(); // לא כולל החודש הנוכחי
 
     const EXPENSE_REGISTRY = [
       // MONTHLY (*)
@@ -429,26 +430,26 @@
       EXPENSE_REGISTRY.forEach(expense => {
         if (expense.type === 'monthly') {
           const missingMonths = [];
-          for (let m = ALERT_FROM_MONTH; m < 12; m++) {
+          for (let m = 0; m < CURRENT_MONTH; m++) {
             if (!expense.values[m]) missingMonths.push(MONTHS_HE[m]);
           }
           if (!missingMonths.length) return;
-          const allYearZero = expense.values.every(v => !v);
+          const allYearZero = expense.values.slice(0, CURRENT_MONTH).every(v => !v);
           const count = missingMonths.length;
           const severity = allYearZero ? 'critical' : count >= 5 ? 'high' : count >= 2 ? 'warning' : 'info';
           alerts.push({ name: expense.name, type: 'monthly', severity, months: missingMonths,
-                        note: allYearZero ? 'לא נרשמה הוצאה זו בכל השנה' : null });
+                        note: allYearZero ? 'לא נרשמה הוצאה זו בחודשים שחלפו' : null });
 
         } else if (expense.type === 'bimonthly') {
           let cycleBase = -1;
           for (let m = 0; m < 12; m++) { if (expense.values[m] > 0) { cycleBase = m % 2; break; } }
           if (cycleBase === -1) {
             alerts.push({ name: expense.name, type: 'bimonthly', severity: 'critical', months: [],
-                          note: 'לא נמצא תשלום כלשהו בכל השנה' });
+                          note: 'לא נמצא תשלום כלשהו בחודשים שחלפו' });
             return;
           }
           const missingMonths = [];
-          for (let m = ALERT_FROM_MONTH; m < 12; m++) {
+          for (let m = 0; m < CURRENT_MONTH; m++) {
             if (m % 2 === cycleBase && !expense.values[m]) missingMonths.push(MONTHS_HE[m]);
           }
           if (!missingMonths.length) return;

@@ -356,7 +356,7 @@
         const operatingProfit = totalProfit - (regularExp - regularExpVat);
 
         return {
-          totalPay, totalProfit,
+          totalPay, totalProfit, assessorPay,
           myWork, autoIncome, manualIncome,
           regularExp, totalExp,
           calcVatRefund, danExpVat, finalVat, effectiveVat: calcVatRefund, netExp,
@@ -784,7 +784,12 @@
                   <td className="py-3 px-4 font-bold">סה"כ</td>
                   <td className="py-3 px-4 text-center font-medium">{fmtDec(totalHours)} ש׳</td>
                   <td colSpan={3}></td>
-                  <td className="py-3 px-4 text-center font-bold text-red-300">₪{fmt(totals.totalPay)}</td>
+                  <td className="py-3 px-4 text-center font-bold text-red-300">
+                    ₪{fmt(totals.totalPay)}
+                    {totals.assessorPay > 0 && (
+                      <div className="text-xs font-normal text-red-200/70 mt-0.5">(מזה ₪{fmt(totals.assessorPay)} מאבחנות)</div>
+                    )}
+                  </td>
                   <td className="py-3 px-4 text-center font-bold text-emerald-300">₪{fmt(totals.totalProfit)}</td>
                   <td colSpan={editMode ? 2 : 1}></td>
                 </tr>
@@ -1031,7 +1036,7 @@
                   <tr className="border-b border-amber-200 bg-amber-50">
                     <td className="py-3 px-4">
                       <span className="inline-block bg-amber-200 text-amber-800 text-xs font-medium px-2 py-0.5 rounded-full ml-1">⚙ אוטומטי</span>
-                      <span className="font-medium text-slate-700">שכר מטפלים</span>
+                      <span className="font-medium text-slate-700">שכר מטפלים ומאבחנות</span>
                     </td>
                     <td className="py-3 px-4 text-slate-400 text-xs">מחושב ממסך מטפלים</td>
                     <td></td>
@@ -1178,7 +1183,7 @@
               <div>
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">הוצאות</p>
                 <div className="space-y-1">
-                  <SumRow label="שכר מטפלים"    value={`₪${fmt(totals.totalPay)}`}      red />
+                  <SumRow label="שכר מטפלים ומאבחנות" value={`₪${fmt(totals.totalPay)}`} red />
                   <SumRow label="הוצאות תפעול" value={`₪${fmt(totals.regularExp)}`}    red />
                   {totals.specialExpense > 0 && (
                     <SumRow label={`הוצאות מיוחדות${(income.specialExpense||{}).description ? ' — ' + income.specialExpense.description : ''}`} value={`₪${fmt(totals.specialExpense)}`} red />

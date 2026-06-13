@@ -298,8 +298,10 @@
     const DAN_CATS   = ['הוצאות דן שוטפות', 'הוצאות דן חד פעמי', 'מיסים'];
     const MONTH_NAMES= ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
     const ASSESSORS  = [
-      { id: 'sivan', name: 'סיון גמובוש', baseRate: 1300 },
-      { id: 'lital', name: 'ליטל דכס',   baseRate: 1200 },
+      { id: 'sivan',   name: 'סיון גמובוש',     baseRate: 1300 },
+      { id: 'lital',   name: 'ליטל דכס',        baseRate: 1200 },
+      { id: 'racheli', name: 'רחלי אשר צדקה',   baseRate: 1200, noVat: true },
+      { id: 'marina',  name: 'מרינה אריאל',     baseRate: 1200, noVat: true },
     ];
     const DEFAULT_THERAPISTS = [
       { id:1,  name:'איריס סער',      therapistRate:190, instituteProfit:132 },
@@ -371,7 +373,7 @@
     }
 
     const emptyMonth = () => ({
-      therapistData: {}, assessorData: { sivan: [], lital: [] },
+      therapistData: {}, assessorData: { sivan: [], lital: [], racheli: [], marina: [] },
       expenses: [],
       income: { invoiceReport:'', finalVat:'', specialIncome:{}, specialExpense:{}, myWork:{} },
     });
@@ -404,15 +406,17 @@
       ASSESSORS.forEach(a => {
         const entries = assessorData[a.id] || [];
         const defaults = {
-          basicDiagnosis: Math.round(a.baseRate * (1 + VAT_RATE)),
+          basicDiagnosis: a.noVat ? a.baseRate : Math.round(a.baseRate * (1 + VAT_RATE)),
           fullDiagnosis:  Math.round(1500 * (1 + VAT_RATE)),
           mathExp: 350, engExp: 350,
         };
-        entries.forEach(e => {
-          assessorPay += num(e.basicDiagnosis || defaults.basicDiagnosis)
-                       + num(e.fullDiagnosis  || 0)
-                       + num(e.mathExp        || 0)
-                       + num(e.engExp         || 0);
+        entries.forEach(entry => {
+          ['basicDiagnosis','fullDiagnosis','mathExp','engExp'].forEach(svc => {
+            const s = entry[svc] || {};
+            if (s.enabled) {
+              assessorPay += num(s.amount) || defaults[svc];
+            }
+          });
         });
       });
 

@@ -784,10 +784,7 @@
                   <td className="py-3 px-4 font-bold">סה"כ</td>
                   <td className="py-3 px-4 text-center font-medium">{fmtDec(totalHours)} ש׳</td>
                   <td colSpan={3}></td>
-                  <td className="py-3 px-4 text-center font-bold text-red-300">
-                    <div>₪{fmt(totals.totalPay)}</div>
-                    {totals.assessorPay > 0 && <div className="text-xs font-normal" style={{opacity:'0.65',marginTop:'2px'}}>{'(מזה ₪' + fmt(totals.assessorPay) + ' מאבחנות)'}</div>}
-                  </td>
+                  <td className="py-3 px-4 text-center font-bold text-red-300">₪{fmt(totals.totalPay)}</td>
                   <td className="py-3 px-4 text-center font-bold text-emerald-300">₪{fmt(totals.totalProfit)}</td>
                   <td colSpan={editMode ? 2 : 1}></td>
                 </tr>

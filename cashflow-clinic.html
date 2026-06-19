@@ -6,7 +6,7 @@
   <title>תזרים — מרכז קשב רב</title>
   <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-  <script src="https://unpkg.com/@babel/standalone@7.23.9/babel.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.21.5/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -24,8 +24,7 @@
 </head>
 <body>
   <div id="root"></div>
-  <script type="text/babel" data-presets="react,env" data-plugins="transform-react-jsx">
-    /* @jsxRuntime classic */
+  <script type="text/babel">
     const { useState, useEffect, useCallback, useMemo, useRef } = React;
 
     // ─── CONSTANTS ────────────────────────────────────────────────────────────

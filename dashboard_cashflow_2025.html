@@ -380,8 +380,29 @@
 
     const monthKey = m => `cf_month_${YEAR}_${String(m).padStart(2,'0')}`;
 
+    // תעריפים ומטפלים לפי חודש — זהה ל-cashflow-clinic.html
+    const RATE_RAISES = [
+      { from: '2026-10', amount: 10 },
+    ];
+    const THERAPIST_LAST_MONTH = {
+      'איריס סער':   '2026-08',
+      'לירית מטלון': '2026-09',
+    };
+    const ymKey = (m, y) => `${y}-${String(m).padStart(2,'0')}`;
+    function therapistsForMonth(list, m, y, therapistData = {}) {
+      const k = ymKey(m, y);
+      const raise = RATE_RAISES.reduce((s, r) => k >= r.from ? s + r.amount : s, 0);
+      return list
+        .filter(t => {
+          const last = THERAPIST_LAST_MONTH[t.name];
+          const d = therapistData[t.id] || {};
+          return !last || k <= last || num(d.hours) > 0 || num(d.bonus) > 0;
+        })
+        .map(t => raise ? { ...t, therapistRate: t.therapistRate + raise, instituteProfit: t.instituteProfit - raise } : t);
+    }
+
     // ─── CALC PER MONTH ─────────────────────────────────────────────────────────
-    function calcMonth(mData, therapists) {
+    function calcMonth(mData, therapists, month) {
       const income       = mData.income       || {};
       const expenses     = mData.expenses     || [];
       const therapistData= mData.therapistData|| {};
@@ -393,7 +414,7 @@
 
       // שכר מטפלים
       let therapistPay = 0;
-      therapists.forEach(t => {
+      therapistsForMonth(therapists, month, YEAR, therapistData).forEach(t => {
         const d    = therapistData[t.id] || {};
         const h    = num(d.hours);
         const base = h * t.therapistRate;
@@ -544,7 +565,7 @@
         const monthsRaw   = snaps.slice(1).map(s => fbParse(s.val()) || emptyMonth());
 
         // חישוב לכל חודש
-        const computed = monthsRaw.map(m => calcMonth(m, therapists));
+        const computed = monthsRaw.map((m, i) => calcMonth(m, therapists, i + 1));
 
         // ─── KPI ───────────────────────────────────────────────────────────────
         const withData    = computed.filter(m => m.revenue > 0);

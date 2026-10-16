@@ -101,6 +101,31 @@
     const num = v => parseFloat(v) || 0;
     const monthKey = (m, y) => `cf_month_${y}_${String(m).padStart(2,'0')}`;
 
+    // ─── תעריפים ומטפלים לפי חודש ────────────────────────────────────────────
+    // העלאות תעריף: חלות מהחודש הנקוב והלאה. חודשים קודמים מחושבים לפי התעריף הישן.
+    // ההעלאה עוברת מרווח המכון לתשלום למטפל (סה"כ לשעה לא משתנה).
+    const RATE_RAISES = [
+      { from: '2026-10', amount: 10 },
+    ];
+    // מטפלים שעזבו: החודש האחרון שעבדו (כולל). בחודשים מאוחרים יותר לא יוצגו,
+    // אלא אם הוזנו להם שעות/תוספת באותו חודש. התיעוד בחודשים הקודמים נשמר.
+    const THERAPIST_LAST_MONTH = {
+      'איריס סער':   '2026-08',
+      'לירית מטלון': '2026-09',
+    };
+    const ymKey = (m, y) => `${y}-${String(m).padStart(2,'0')}`;
+    const rateRaiseFor = (m, y) => RATE_RAISES.reduce((s, r) => ymKey(m, y) >= r.from ? s + r.amount : s, 0);
+    const therapistsForMonth = (list, m, y, therapistData = {}) => {
+      const k = ymKey(m, y), raise = rateRaiseFor(m, y);
+      return list
+        .filter(t => {
+          const last = THERAPIST_LAST_MONTH[t.name];
+          const d = therapistData[t.id] || {};
+          return !last || k <= last || num(d.hours) > 0 || num(d.bonus) > 0;
+        })
+        .map(t => raise ? { ...t, therapistRate: t.therapistRate + raise, instituteProfit: t.instituteProfit - raise } : t);
+    };
+
     const fromStorage = (key, fallback) => {
       try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
       catch { return fallback; }
@@ -295,7 +320,7 @@
         const assessorData = data.assessorData || {};
 
         let totalPay = 0, totalProfit = 0, therapistVat = 0;
-        therapists.forEach(t => {
+        therapistsForMonth(therapists, month, year, therapistData).forEach(t => {
           const d = therapistData[t.id] || {};
           const h = num(d.hours);
           const basePay = h * t.therapistRate;
@@ -365,7 +390,7 @@
           netAuto:   autoIncome   - netExp,
           netManual: manualIncome - netExp,
         };
-      }, [therapists, data]);
+      }, [therapists, data, month, year]);
 
       const years = [];
       for (let y = 2024; y <= today.getFullYear() + 2; y++) years.push(y);
@@ -487,6 +512,7 @@
               therapists={therapists} therapistData={data.therapistData} totals={totals}
               assessorData={data.assessorData || {}}
               monthLabel={`${MONTH_NAMES[month-1]} ${year}`}
+              month={month} year={year}
               onUpdateTherapists={saveTherapists}
               onUpdateData={d => saveData({ ...data, therapistData: d })}
               onUpdateAssessorData={d => saveData({ ...data, assessorData: d })}
@@ -561,7 +587,9 @@
 
     // ─── THERAPISTS TAB ───────────────────────────────────────────────────────
 
-    function TherapistsTab({ therapists, therapistData, totals, assessorData, monthLabel, onUpdateTherapists, onUpdateData, onUpdateAssessorData }) {
+    function TherapistsTab({ therapists, therapistData, totals, assessorData, monthLabel, month, year, onUpdateTherapists, onUpdateData, onUpdateAssessorData }) {
+      const raise = rateRaiseFor(month, year);
+      const shownTherapists = therapistsForMonth(therapists, month, year, therapistData);
       const [editMode,    setEditMode]    = useState(false);
       const [editingId,   setEditingId]   = useState(null);
       const [editForm,    setEditForm]    = useState({});
@@ -587,7 +615,8 @@
       const startEdit  = t => { setEditingId(t.id); setEditForm({...t}); };
       const cancelEdit = () => { setEditingId(null); };
       const saveEdit   = () => {
-        onUpdateTherapists(therapists.map(t => t.id === editingId ? { ...editForm, therapistRate: +editForm.therapistRate, instituteProfit: +editForm.instituteProfit } : t));
+        // התעריף המוצג כולל את העלאת החודש — שומרים את תעריף הבסיס
+        onUpdateTherapists(therapists.map(t => t.id === editingId ? { ...editForm, therapistRate: +editForm.therapistRate - raise, instituteProfit: +editForm.instituteProfit + raise } : t));
         setEditingId(null);
       };
 
@@ -597,12 +626,12 @@
 
       const addTherapist = () => {
         if (!newForm.name.trim()) return;
-        onUpdateTherapists([...therapists, { id: Date.now(), ...newForm, therapistRate: +newForm.therapistRate, instituteProfit: +newForm.instituteProfit }]);
+        onUpdateTherapists([...therapists, { id: Date.now(), ...newForm, therapistRate: +newForm.therapistRate - raise, instituteProfit: +newForm.instituteProfit + raise }]);
         setNewForm({ name:'', therapistRate:190, instituteProfit:132, issuesInvoice:false });
         setShowAdd(false);
       };
 
-      const totalHours = therapists.reduce((s, t) => s + num((therapistData[t.id]||{}).hours), 0);
+      const totalHours = shownTherapists.reduce((s, t) => s + num((therapistData[t.id]||{}).hours), 0);
 
       return (
         <>
@@ -664,7 +693,7 @@
                 </tr>
               </thead>
               <tbody>
-                {therapists.map((t, idx) => {
+                {shownTherapists.map((t, idx) => {
                   const d = therapistData[t.id] || {};
                   const h = num(d.hours);
                   const basePay = h * t.therapistRate;
@@ -1441,7 +1470,7 @@
             const therapistDataM = d.therapistData || {};
             const assessorDataM = d.assessorData || {};
             let totalPayM = 0, therapistVatM = 0, assessorVatM = 0;
-            therapists.forEach(t => {
+            therapistsForMonth(therapists, m, y, therapistDataM).forEach(t => {
               const h = num((therapistDataM[t.id] || {}).hours);
               const basePay = h * t.therapistRate;
               const vatOnPay = t.issuesInvoice ? basePay * VAT_RATE : 0;
@@ -1484,11 +1513,12 @@
       }, [month, year, therapists]);
 
       // ── Therapist hours data (current month) ──
+      const monthTherapists = useMemo(() => therapistsForMonth(therapists, month, year, therapistData), [therapists, therapistData, month, year]);
       const therapistHours = useMemo(() =>
-        therapists
+        monthTherapists
           .map(t => ({ name: t.name, hours: num((therapistData[t.id] || {}).hours) }))
           .filter(t => t.hours > 0),
-        [therapists, therapistData]
+        [monthTherapists, therapistData]
       );
 
       // ── Monthly total hours (last 12 months) ──
@@ -1667,7 +1697,7 @@
                     </thead>
                     <tbody>
                       {therapistHours.map((t, i) => {
-                        const th = therapists.find(x => x.name === t.name);
+                        const th = monthTherapists.find(x => x.name === t.name);
                         const pay    = th ? t.hours * th.therapistRate   : 0;
                         const profit = th ? t.hours * th.instituteProfit : 0;
                         const pct = totalHours > 0 ? Math.round(t.hours / totalHours * 100) : 0;

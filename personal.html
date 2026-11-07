@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>הוצאות אישיות — דן</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+  <script src="personal-import.js"></script>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; }
+    .drop-active { background: #eff6ff; border-color: #3b82f6; }
+  </style>
+</head>
+<body class="bg-slate-100 min-h-screen">
+
+  <!-- מסך כניסה -->
+  <div id="gate" class="min-h-screen flex items-center justify-center bg-gray-950">
+    <div class="bg-gray-900 border border-gray-700 rounded-2xl shadow-xl p-8 w-80 text-right">
+      <h1 class="text-white text-xl font-bold mb-2">הוצאות אישיות</h1>
+      <p id="gateMsg" class="text-gray-300 text-sm mb-5">כניסה לדן בלבד</p>
+      <button id="signInBtn" class="w-full bg-white hover:bg-gray-100 text-gray-800 font-medium py-3 rounded-xl transition">כניסה עם Google</button>
+    </div>
+  </div>
+
+  <!-- האפליקציה -->
+  <div id="app" class="hidden p-3 md:p-6 max-w-6xl mx-auto">
+
+    <div class="bg-white border border-slate-200 rounded-2xl shadow-sm px-5 py-4 mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-bold text-slate-800">הוצאות אישיות</h1>
+        <p class="text-sm text-slate-400" id="monthLabel"></p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <select id="monthSel" class="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white"></select>
+        <a href="cashflow-clinic.html" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300">← לתזרים העסק</a>
+        <button id="signOutBtn" class="px-3 py-2 rounded-lg text-sm font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300">יציאה</button>
+      </div>
+    </div>
+
+    <div id="errorBox" class="hidden bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-5 text-sm"></div>
+
+    <!-- ייבוא -->
+    <label id="drop" class="block bg-white border-2 border-dashed border-slate-300 rounded-2xl p-5 mb-5 text-center cursor-pointer transition">
+      <input id="fileInput" type="file" accept=".xlsx,.xls" multiple class="hidden" />
+      <div class="text-slate-700 font-medium">⬆ ייבוא קבצי אקסל — בנק הפועלים ו/או ישראכרט</div>
+      <div class="text-xs text-slate-400 mt-1">גרור לכאן או לחץ לבחירה. אפשר כמה קבצים יחד; תנועה שכבר יובאה לא תיספר פעמיים.</div>
+      <div id="importMsg" class="text-sm mt-3 hidden"></div>
+    </label>
+
+    <!-- KPI -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+      <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-sm text-slate-500">הכנסות לחשבון</div><div id="kpiInc" class="text-2xl font-bold text-emerald-600 mt-1">—</div></div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-sm text-slate-500">הוצאות</div><div id="kpiExp" class="text-2xl font-bold text-red-500 mt-1">—</div></div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-4"><div class="text-sm text-slate-500">נשאר החודש</div><div id="kpiNet" class="text-2xl font-bold mt-1">—</div></div>
+    </div>
+
+    <!-- גרפים -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <h2 class="font-semibold text-slate-800 mb-3">פילוח הוצאות לפי קטגוריה</h2>
+        <div class="flex flex-col sm:flex-row gap-4 items-center">
+          <div class="w-48 h-48 shrink-0"><canvas id="pie"></canvas></div>
+          <table class="w-full text-sm"><tbody id="catTable"></tbody></table>
+        </div>
+      </div>
+      <div class="bg-white border border-slate-200 rounded-2xl p-5">
+        <h2 class="font-semibold text-slate-800 mb-3">6 חודשים אחרונים</h2>
+        <div class="h-56"><canvas id="bars"></canvas></div>
+      </div>
+    </div>
+
+    <!-- תנועות -->
+    <div class="bg-white border border-slate-200 rounded-2xl overflow-hidden mb-5">
+      <div class="flex flex-wrap items-center justify-between gap-2 px-5 py-4 border-b border-slate-100">
+        <h2 class="font-semibold text-slate-800">תנועות <span id="filterLabel" class="text-sm font-normal text-blue-600"></span></h2>
+        <div class="text-xs text-slate-400">שינוי קטגוריה חל על כל התנועות של אותו בית עסק — גם בעתיד</div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead><tr class="bg-slate-50 text-slate-600 border-b border-slate-200">
+            <th class="text-right py-2 px-3 font-medium">תאריך</th>
+            <th class="text-right py-2 px-3 font-medium">תיאור</th>
+            <th class="text-center py-2 px-3 font-medium">מקור</th>
+            <th class="text-center py-2 px-3 font-medium">סכום</th>
+            <th class="text-right py-2 px-3 font-medium">קטגוריה</th>
+          </tr></thead>
+          <tbody id="txBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="text-left mb-8">
+      <button id="clearMonthBtn" class="text-xs text-slate-400 hover:text-red-500 underline">מחיקת כל התנועות של החודש הזה</button>
+    </div>
+  </div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBG7zf680kZvhHJBUbXOUVcWuHxniX3fUg",
+    authDomain: "keshev-rav.firebaseapp.com",
+    databaseURL: "https://keshev-rav-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "keshev-rav",
+    storageBucket: "keshev-rav.firebasestorage.app",
+    messagingSenderId: "94450643941",
+    appId: "1:94450643941:web:52bc8fa93720bc57dbf50c",
+  };
+  if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+  const db = firebase.database();
+  const auth = firebase.auth();
+
+  // דף אישי — דן בלבד. נעול גם בחוקי Firebase (נתיב personal).
+  const DAN_EMAIL = 'barzilaydan@gmail.com';
+  const PATH = 'personal';
+  const { CATEGORIES, parseWorkbook, guessCategory, merchantKey, fbKey } = window.PersonalImport;
+  const MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const COLORS = ['#3b82f6','#ef4444','#f59e0b','#10b981','#8b5cf6','#ec4899','#14b8a6','#f97316','#6366f1','#84cc16','#06b6d4','#94a3b8'];
+  const SOURCE = { bank: 'בנק', card: 'אשראי' };
+
+  const $ = id => document.getElementById(id);
+  const fmt = n => '₪' + Math.round(n).toLocaleString('he-IL');
+  const fmt2 = n => '₪' + n.toLocaleString('he-IL', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+  const monthName = ym => { const [y, m] = ym.split('-'); return `${MONTHS[+m - 1]} ${y}`; };
+
+  let tx = {}, rules = {}, month = null, catFilter = null, pie = null, bars = null;
+
+  const catOf = t => rules[fbKey(merchantKey(t.desc, t.source))] || guessCategory(t.desc, t.type === 'income');
+
+  // ── כניסה ──
+  $('signInBtn').onclick = () =>
+    auth.signInWithPopup(new firebase.auth.GoogleAuthProvider().setCustomParameters({ prompt: 'select_account' })).catch(() => {});
+  $('signOutBtn').onclick = () => auth.signOut();
+
+  let started = false;
+  auth.onAuthStateChanged(u => {
+    if (!u) { $('gate').classList.remove('hidden'); $('app').classList.add('hidden'); return; }
+    if (!u.emailVerified || (u.email || '').toLowerCase() !== DAN_EMAIL) {
+      $('gateMsg').textContent = `החשבון ${u.email} אינו מורשה לדף זה.`;
+      auth.signOut();
+      return;
+    }
+    $('gate').classList.add('hidden'); $('app').classList.remove('hidden');
+    if (!started) { started = true; listen(); }
+  });
+
+  function showError(e) {
+    $('errorBox').classList.remove('hidden');
+    $('errorBox').textContent = /permission/i.test(String(e && (e.code || e.message)))
+      ? 'אין הרשאה לנתונים האישיים. צריך לעדכן את חוקי האבטחה ב-Firebase (נתיב personal).'
+      : 'שגיאה בחיבור לענן: ' + (e && e.message || e);
+  }
+
+  function listen() {
+    db.ref(`${PATH}/tx`).on('value', s => { tx = s.val() || {}; refreshMonths(); render(); }, showError);
+    db.ref(`${PATH}/rules`).on('value', s => { rules = s.val() || {}; render(); }, showError);
+  }
+
+  // ── בחירת חודש ──
+  function refreshMonths() {
+    const months = [...new Set(Object.values(tx).map(t => t.month))].sort().reverse();
+    if (!months.length) { const d = new Date(); months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`); }
+    if (!month || !months.includes(month)) month = months[0];
+    $('monthSel').innerHTML = months.map(m => `<option value="${m}" ${m === month ? 'selected' : ''}>${monthName(m)}</option>`).join('');
+  }
+  $('monthSel').onchange = e => { month = e.target.value; catFilter = null; render(); };
+
+  // ── חישובים ──
+  function summarize(m) {
+    let inc = 0, exp = 0; const byCat = {};
+    Object.values(tx).filter(t => t.month === m).forEach(t => {
+      const c = catOf(t);
+      if (c === 'לא להכליל') return;
+      if (t.type === 'income') inc += t.amount;
+      else { exp += t.amount; byCat[c] = (byCat[c] || 0) + t.amount; }
+    });
+    return { inc, exp, byCat };
+  }
+
+  function render() {
+    if (!month) return;
+    $('monthLabel').textContent = monthName(month);
+    const { inc, exp, byCat } = summarize(month);
+    $('kpiInc').textContent = fmt(inc);
+    $('kpiExp').textContent = fmt(exp);
+    $('kpiNet').textContent = fmt(inc - exp);
+    $('kpiNet').className = 'text-2xl font-bold mt-1 ' + (inc - exp >= 0 ? 'text-emerald-600' : 'text-red-500');
+
+    // קטגוריות
+    const cats = Object.entries(byCat).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+    $('catTable').innerHTML = cats.map(([c, v], i) => `
+      <tr class="cursor-pointer hover:bg-slate-50 ${catFilter === c ? 'bg-blue-50' : ''}" data-cat="${esc(c)}">
+        <td class="py-1 px-1"><span class="inline-block w-2.5 h-2.5 rounded-full ml-1" style="background:${COLORS[i % COLORS.length]}"></span>${esc(c)}</td>
+        <td class="py-1 px-1 text-left font-medium">${fmt(v)}</td>
+        <td class="py-1 px-1 text-left text-slate-400 text-xs">${exp > 0 ? Math.round(v / exp * 100) : 0}%</td>
+      </tr>`).join('') || '<tr><td class="text-slate-400 py-4">אין עדיין נתונים לחודש זה — ייבא קובץ</td></tr>';
+    $('catTable').querySelectorAll('tr[data-cat]').forEach(r => r.onclick = () => {
+      catFilter = catFilter === r.dataset.cat ? null : r.dataset.cat; render();
+    });
+
+    if (pie) pie.destroy();
+    pie = new Chart($('pie'), {
+      type: 'doughnut',
+      data: { labels: cats.map(c => c[0]), datasets: [{ data: cats.map(c => Math.round(c[1])), backgroundColor: cats.map((_, i) => COLORS[i % COLORS.length]), borderWidth: 2, borderColor: '#fff' }] },
+      options: { plugins: { legend: { display: false } }, cutout: '62%', maintainAspectRatio: false },
+    });
+
+    // 6 חודשים
+    const [y, m] = month.split('-').map(Number);
+    const last6 = Array.from({ length: 6 }, (_, i) => { const t = y * 12 + m - 1 - (5 - i); return `${Math.floor(t / 12)}-${String(t % 12 + 1).padStart(2, '0')}`; });
+    const sums = last6.map(summarize);
+    if (bars) bars.destroy();
+    bars = new Chart($('bars'), {
+      type: 'bar',
+      data: { labels: last6.map(k => MONTHS[+k.split('-')[1] - 1]), datasets: [
+        { label: 'הכנסות', data: sums.map(s => Math.round(s.inc)), backgroundColor: '#10b981', borderRadius: 4 },
+        { label: 'הוצאות', data: sums.map(s => Math.round(s.exp)), backgroundColor: '#ef4444', borderRadius: 4 },
+      ] },
+      options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } }, scales: { y: { ticks: { callback: v => '₪' + v.toLocaleString() } } } },
+    });
+
+    // תנועות
+    $('filterLabel').textContent = catFilter ? `· ${catFilter} (לחץ שוב על הקטגוריה לביטול)` : '';
+    const list = Object.entries(tx).filter(([, t]) => t.month === month && (!catFilter || catOf(t) === catFilter))
+      .sort((a, b) => b[1].date.localeCompare(a[1].date));
+    $('txBody').innerHTML = list.map(([id, t]) => {
+      const c = catOf(t);
+      const opts = CATEGORIES.filter(o => t.type === 'income' ? (o === 'הכנסה' || o === 'לא להכליל') : o !== 'הכנסה');
+      const [yy, mm, dd] = t.date.split('-');
+      return `<tr class="border-b border-slate-100 ${c === 'לא להכליל' ? 'opacity-40' : ''}">
+        <td class="py-2 px-3 text-slate-500 whitespace-nowrap">${dd}.${mm}</td>
+        <td class="py-2 px-3 text-slate-800">${esc(t.desc)}${t.note ? `<span class="text-xs text-slate-400 mr-1">· ${esc(t.note)}</span>` : ''}</td>
+        <td class="py-2 px-3 text-center text-xs text-slate-500">${SOURCE[t.source] || ''}</td>
+        <td class="py-2 px-3 text-center font-medium whitespace-nowrap ${t.type === 'income' ? 'text-emerald-600' : 'text-slate-800'}">${t.type === 'income' ? '+' : ''}${fmt2(t.amount)}</td>
+        <td class="py-1 px-3"><select data-id="${esc(id)}" class="border border-slate-200 rounded-lg px-2 py-1 text-sm bg-white w-36">
+          ${opts.map(o => `<option ${o === c ? 'selected' : ''}>${o}</option>`).join('')}</select></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="5" class="text-center text-slate-400 py-8">אין תנועות</td></tr>';
+    $('txBody').querySelectorAll('select').forEach(s => s.onchange = () => {
+      const t = tx[s.dataset.id];
+      db.ref(`${PATH}/rules/${fbKey(merchantKey(t.desc, t.source))}`).set(s.value).catch(showError);
+    });
+  }
+
+  // ── ייבוא ──
+  async function importFiles(files) {
+    const msg = $('importMsg');
+    msg.className = 'text-sm mt-3 text-slate-500'; msg.textContent = 'קורא קבצים...';
+    const lines = []; let added = 0, existing = 0, newest = null;
+    const updates = {};
+    for (const f of files) {
+      try {
+        const res = parseWorkbook(XLSX, new Uint8Array(await f.arrayBuffer()));
+        if (!res) { lines.push(`❌ ${f.name}: לא זוהה כקובץ של בנק הפועלים או ישראכרט`); continue; }
+        let a = 0, e = 0;
+        res.tx.forEach(t => {
+          if (tx[t.id] || updates[t.id]) { e++; return; }
+          const { id, ...rec } = t; updates[id] = rec; a++;
+          if (!newest || t.month > newest) newest = t.month;
+        });
+        added += a; existing += e;
+        let line = `✓ ${f.name} (${res.kind === 'bank' ? 'בנק' : 'אשראי'}): ${a} חדשות` + (e ? `, ${e} כבר היו` : '');
+        if (res.skippedCard) line += ` · דולגו ${res.skippedCard} חיובי כרטיס (${fmt(res.skippedCardSum)}) — הפירוט שלהם מגיע מקובץ הכרטיס`;
+        lines.push(line);
+      } catch (err) { lines.push(`❌ ${f.name}: שגיאה בקריאת הקובץ`); }
+    }
+    try {
+      if (added) await db.ref(`${PATH}/tx`).update(updates);
+      if (newest) month = newest;
+      refreshMonths(); render();
+      msg.className = 'text-sm mt-3 text-slate-700 text-right';
+      msg.innerHTML = lines.map(esc).join('<br>');
+    } catch (err) { showError(err); msg.textContent = ''; }
+  }
+  $('fileInput').onchange = e => { importFiles([...e.target.files]); e.target.value = ''; };
+  const drop = $('drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drop-active'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drop-active'); }));
+  drop.addEventListener('drop', e => importFiles([...e.dataTransfer.files]));
+
+  $('clearMonthBtn').onclick = () => {
+    if (!month || !confirm(`למחוק את כל התנועות של ${monthName(month)}? (הסיווגים שלמדת נשמרים)`)) return;
+    const upd = {};
+    Object.entries(tx).forEach(([id, t]) => { if (t.month === month) upd[id] = null; });
+    db.ref(`${PATH}/tx`).update(upd).catch(showError);
+  };
+</script>
+</body>
+</html>

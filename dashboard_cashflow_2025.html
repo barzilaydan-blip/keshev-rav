@@ -8,6 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <style>
     :root {
       --bg: #060b18;
@@ -291,6 +292,9 @@
     };
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
+    const auth = firebase.auth();
+    // מי שמורשה להיכנס — זהה ל-cashflow-clinic.html ולחוקי האבטחה ב-Firebase
+    const ALLOWED_EMAILS = ['barzilaydan@gmail.com', 'bekeshevrav@gmail.com'];
 
     // ─── CONSTANTS ──────────────────────────────────────────────────────────────
     const YEAR       = new Date().getFullYear();
@@ -729,7 +733,24 @@
       document.getElementById('loadingOverlay').style.display = 'none';
     }
 
-    init();
+    // טוען נתונים רק אחרי כניסה עם חשבון גוגל מורשה
+    function showSignIn(msg) {
+      const o = document.getElementById('loadingOverlay');
+      o.style.display = '';
+      o.innerHTML = '<p>' + (msg || 'יש להתחבר כדי לצפות בדשבורד') + '</p>' +
+        '<button id="signInBtn" style="margin-top:12px;padding:10px 22px;border-radius:10px;border:0;background:#fff;color:#1f2937;font:inherit;font-weight:600;cursor:pointer">כניסה עם Google</button>';
+      document.getElementById('signInBtn').onclick = () =>
+        auth.signInWithPopup(new firebase.auth.GoogleAuthProvider().setCustomParameters({ prompt: 'select_account' })).catch(() => {});
+    }
+    let started = false;
+    auth.onAuthStateChanged(u => {
+      if (!u) return showSignIn();
+      if (!u.emailVerified || !ALLOWED_EMAILS.includes((u.email || '').toLowerCase())) {
+        auth.signOut();
+        return showSignIn(`החשבון ${u.email} אינו מורשה להיכנס.`);
+      }
+      if (!started) { started = true; init(); }
+    });
   </script>
 </body>
 </html>
